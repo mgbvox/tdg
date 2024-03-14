@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "tdg"
+version = "0.1.0"
+description = ""
+authors = ["Matthew Billman <mgbvox@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.2.0"
+ruff = "^0.3.2"
+mypy = "^1.9.0"
+tox = "^4.14.1"
+pre-commit = "^3.6.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
