@@ -17,9 +17,6 @@ def ensure_list(item: Union[T, list[T]]) -> list[T]:
     return item
 
 
-from typing import Optional
-
-
 def do_py_cmd(
     cmd,
     shell: pexpect.spawn,
@@ -28,7 +25,7 @@ def do_py_cmd(
     prompt: str = ">>>",
 ):
     tab = indent * level
-    expect = lambda : shell.expect([">>>", "\.\.\."])
+    expect = lambda: shell.expect([">>>", "\.\.\."])
 
     if isinstance(cmd, dict):
         # nested, e.g. for loop

@@ -6,11 +6,14 @@ authors = ["Matthew Billman <mgbvox@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11,<3.12"
 transformers = "^4.39.1"
 torch = "^2.2.1"
 accelerate = "^0.28.0"
 openai = "^1.14.3"
+pinliner = "^0.2.0"
+python-dotenv = "^1.0.1"
+dspy = {git = "https://github.com/stanfordnlp/dspy"}
 
 
 [tool.poetry.group.dev.dependencies]
@@ -22,6 +25,7 @@ pre-commit = "^3.6.2"
 jupyter = "^1.0.0"
 datasets = "^2.18.0"
 pytest = "^8.1.1"
+matplotlib = "^3.8.3"
 
 [build-system]
 requires = ["poetry-core"]

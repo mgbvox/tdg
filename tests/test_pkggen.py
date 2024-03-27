@@ -38,24 +38,20 @@ mk_pkg(name:str, src={"main":"# the main file"}, tests={"test_foo":test_foo.read
 """
 
 
-
-
 def mk_pkg(name: Optional[str] = None) -> Path:
     name = name or f"my_package_{str(uuid.uuid4()).replace('-', '')}"
     root = test_root / f"pkgs/gen/{name}"
 
-
     return root
-
-
 
 
 def test_mk_root():
     pkg = mk_pkg("cool_beans")
     with contextlib.chdir(pkg):
-        out = subprocess.run("poetry shell; python -c 'import sys; print(sys.path)'", shell=True)
+        out = subprocess.run(
+            "poetry shell; python -c 'import sys; print(sys.path)'", shell=True
+        )
         print(out.stdout)
-
 
 
 def test_shell():
@@ -68,4 +64,3 @@ def test_shell():
         s.do("python")
         s.do("x = 1")
         out = s.do("print(x)")
-
