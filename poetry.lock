@@ -762,6 +762,24 @@ test = ["Pillow", "contourpy[test-no-images]", "matplotlib"]
 test-no-images = ["pytest", "pytest-cov", "pytest-xdist", "wurlitzer"]
 
 [[package]]
+name = "cs224u-utils"
+version = "0.0.1"
+description = "Custom utils for Stanford course cs224u."
+optional = false
+python-versions = "^3.9"
+files = []
+develop = false
+
+[package.dependencies]
+pydantic = "^2.6.3"
+
+[package.source]
+type = "git"
+url = "https://github.com/mgbvox/cs224u-utils"
+reference = "HEAD"
+resolved_reference = "f04e387c96366971184fa0f537274cee38d2eac2"
+
+[[package]]
 name = "cycler"
 version = "0.12.1"
 description = "Composable style cycles"
@@ -5166,4 +5184,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.12"
-content-hash = "60fa2c15a8c5e1033e43a9720c42c9153ff0d4e86b087059ccf7a26e20b3e32c"
+content-hash = "7accfa0131e5dc61ba35a6c656aa619ccbb026bbc5db7a9270b6e1af964ddb30"

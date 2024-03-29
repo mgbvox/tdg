@@ -1,14 +1,23 @@
 import ast
-import importlib
 import inspect
-import sys
+import os
+import uuid
+from enum import Enum, auto
 from pathlib import Path
 from typing import Callable, Optional
 
 import openai
+import pytest
+from _pytest.config import ExitCode
+from openai.types.chat import ChatCompletion
+from openai.types.chat.chat_completion import Choice
 from pydantic import BaseModel
 
+from tdg import context_managers as cm
+import tdg.extractors
 from tdg.config import Settings
+
+from cs224u_utils.cache import disk_cache
 
 _conf = Settings.from_dotenv()
 DEFAULT_CONTEXT = "No Codebase Yet - generate from scratch."
@@ -62,20 +71,13 @@ def clean_openai_code(code: str) -> str:
     return "\n".join(code)
 
 
-def do_generation_openai(
-    fn_name: str,
-    test: Callable,
-) -> str:
+def eval_init():
+    os.environ["PROC_ID"] = str(uuid.uuid4())
 
+
+@disk_cache
+def _mk_completion(system_prompt: str, user_prompt: str) -> list[Choice]:
     client = openai.Client(api_key=_conf.OPENAI_API_KEY.get_secret_value())
-    system_prompt = _system_template.format(context=DEFAULT_CONTEXT)
-
-    test_source = inspect.getsource(test)
-
-    user_prompt = _user_template.format(
-        test=test_source,
-        fn_name=fn_name,
-    )
     out = client.chat.completions.create(
         messages=[
             {
@@ -89,24 +91,39 @@ def do_generation_openai(
         ],
         model=_conf.LLM_MODEL,
     )
+    return out.choices
+
+
+def do_generation_openai(
+    fn_name: str,
+    test: Callable,
+) -> str:
+
+    system_prompt = _system_template.format(context=DEFAULT_CONTEXT)
+
+    test_source = tdg.extractors.strip_decorator(test)
+
+    user_prompt = _user_template.format(
+        test=test_source,
+        fn_name=fn_name,
+    )
+
+    choices = _mk_completion(system_prompt=system_prompt, user_prompt=user_prompt)
 
     failures: list[tuple[str, AssertionError]] = []
-    for choice in out.choices:
+
+    for choice in choices:
         code = clean_openai_code(choice.message.content)
         if is_valid_python(code) and f"def {fn_name}" in code:
-
-            # remove old implementations of `fn_name`
-            if fn_name in locals():
-                del locals()[fn_name]
-            # populate namespace with code
-            exec(code)
-            fn = locals()[fn_name]
-            try:
-                test(fn)
-                return code
-            except AssertionError as e:
-                failures.append((code, e))
-                continue
+            # in a temporary directory, run a sub-pytest session on the generated code
+            with cm.TempDir() as tmpdir:
+                tmp_test_file = tmpdir.root / f"test_{fn_name}.py"
+                tmp_test_file.write_text(code + "\n\n" + test_source)
+                out = pytest.main([str(tmp_test_file)])
+                if out is ExitCode.OK:
+                    return code
+                else:
+                    failures.append(())
 
 
 class GenHistory(BaseModel):
@@ -115,39 +132,33 @@ class GenHistory(BaseModel):
     prompt: str
 
 
+class Mode(Enum):
+    GEN = auto()
+    EVAL = auto()
+
+
 class gen:
-    def __init__(self, module: str, gen_root: Optional[Path] = None):
-
-        self.gen_root = gen_root or Path.cwd().joinpath("src", "gen")
-        if not self.gen_root.exists():
-            self.gen_root.mkdir(exist_ok=True, parents=True)
-
-        # add the generated code root to sys.path
-        if str(self.gen_root) not in sys.path:
-            sys.path.append(str(self.gen_root))
-
-        self.module = module
-        self.cwd = Path.cwd()
-        self.module_path = self.gen_root.joinpath(*module.split(".")).with_suffix(".py")
-
+    def __init__(self, fn_name: Optional[str] = None):
+        self.fn_name = fn_name
         self._gen_history: list[GenHistory] = []
 
     def __call__(self, test: Callable):
-        if not self.module_path.exists():
-            self.module_path.parent.mkdir(exist_ok=True, parents=True)
-            self.module_path.touch()
+        if os.getenv("TDG_MODE") == Mode.EVAL:
+            return test
+        else:
+            gen = do_generation_openai(fn_name=self.fn_name, test=test)
+            to_modify = Path(inspect.getfile(test))
+            src_lines = to_modify.read_text().splitlines()
+            fn_start_line = inspect.getsourcelines(test)[1]
 
-        try:
-            code = importlib.import_module(self.module)
-            print(code)
-        except ImportError:
+            # account for @tdg.gen decorator
+            fn_start_line -= 1
 
-            sig = inspect.signature(test)
-            to_generate = list(sig.parameters)[0]
+            preceding = "\n".join(src_lines[:fn_start_line])
+            injection = "\n" + gen + "\n"
+            succeding = "\n".join(src_lines[fn_start_line:])
 
-            source = inspect.getsource(test)
+            new_content = preceding + injection + succeding
 
-            gen = do_generation_dspy(fn_name=to_generate, test=source)
-            self._gen_history.append(gen)
+            to_modify.write_text(new_content)
 
-            raise NotImplementedError("TODO!")

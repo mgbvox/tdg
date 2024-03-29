@@ -14,6 +14,7 @@ openai = "^1.14.3"
 pinliner = "^0.2.0"
 python-dotenv = "^1.0.1"
 dspy = {git = "https://github.com/stanfordnlp/dspy"}
+cs224u-utils = {git = "https://github.com/mgbvox/cs224u-utils"}
 
 
 [tool.poetry.group.dev.dependencies]

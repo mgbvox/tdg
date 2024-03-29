@@ -50,10 +50,17 @@ def test_my_func_for_some_case():
 ```
 
 
-some way to specify constraints on generated code block rather than object 
+
+# Notes
 
 
+some way to specify constraints on generated code block rather than object
 Use hypothesis for domain-specific parameter driven testing/fuzzing
 
+Papers seem to be doing:
+1. Gen many results
+2. Execute results
+3. Filter erroring / non-passing output
+4. Select best performing passing (optionally rank programs with verifier)
 
-
+TDG could focus on iteratively honing generated outputs by passing failure tracebacks for N hops
