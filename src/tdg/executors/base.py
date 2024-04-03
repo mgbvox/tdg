@@ -13,7 +13,7 @@ class Executor:
         match is_valid_python(code):
             case True, ast.AST():  # as node (can capture):
                 exec(code, self.env)
-            case False, e:
+            case False, SyntaxError() as e:
                 raise e
             case _:
                 raise NotImplementedError()

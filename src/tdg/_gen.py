@@ -61,12 +61,12 @@ def is_valid_python(code: str) -> bool:
 
 
 def clean_openai_code(code: str) -> str:
-    code = code.strip().splitlines()
-    if "```py" in code[0]:
-        code = code[1:]
-    if "```" in code[-1]:
-        code = code[:-1]
-    return "\n".join(code)
+    code_split = code.strip().splitlines()
+    if "```py" in code_split[0]:
+        code_split = code_split[1:]
+    if "```" in code_split[-1]:
+        code_split = code_split[:-1]
+    return "\n".join(code_split)
 
 
 def eval_init():
@@ -153,6 +153,7 @@ def do_generation_openai(
                     return code
                 else:
                     raise NotImplementedError("Handle Failures!")
+    return ""
 
 
 class GenHistory(BaseModel):
@@ -168,7 +169,7 @@ class Mode(Enum):
 
 class gen:
     def __init__(self, fn_name: Optional[str] = None):
-        self.fn_name = fn_name
+        self.fn_name = fn_name or ""
         self._gen_history: list[GenHistory] = []
 
     def __call__(self, test: Callable):

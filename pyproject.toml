@@ -67,3 +67,11 @@ exclude = [
     "site-packages",
     "venv",
 ]
+
+
+[tool.mypy]
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module="cs224u_utils.*"
+ignore_missing_imports = true

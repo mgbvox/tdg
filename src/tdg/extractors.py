@@ -87,6 +87,7 @@ def find_definition(code: str, name: str) -> Optional[str]:
     finder.visit(ast_module)
     if definition := finder.definition:
         return get_node_source(code, definition)
+    return None
 
 
 def parse_code(code: str) -> ast.AST:
