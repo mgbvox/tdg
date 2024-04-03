@@ -25,7 +25,9 @@ def do_py_cmd(
     prompt: str = ">>>",
 ):
     tab = indent * level
-    expect = lambda: shell.expect([">>>", "\.\.\."])
+
+    def expect():
+        return shell.expect([">>>", "\\.\\.\\."])
 
     if isinstance(cmd, dict):
         # nested, e.g. for loop

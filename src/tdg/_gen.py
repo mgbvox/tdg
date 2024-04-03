@@ -9,15 +9,13 @@ from typing import Callable, Optional
 import openai
 import pytest
 from _pytest.config import ExitCode
+from cs224u_utils.cache import disk_cache
 from openai.types.chat.chat_completion import Choice
 from pydantic import BaseModel
-import json
 
-from tdg import context_managers as cm
 import tdg.extractors
+from tdg import context_managers as cm
 from tdg.config import Settings
-
-from cs224u_utils.cache import disk_cache
 
 _conf = Settings.from_dotenv()
 DEFAULT_CONTEXT = "No Codebase Yet - generate from scratch."
@@ -28,13 +26,13 @@ Add docstrings always (Google docstring syntax) and inline comments where helpfu
 
 Restrictions:
 * You should ONLY output valid python code - your response will be parsed and used directly in a python codebase.
-* You should not wrap your code in markdown or other metaformatting; please output pure python code. 
+* You should not wrap your code in markdown or other metaformatting; please output pure python code.
     Invalid output:
     ```python
     def my_function():
         ...
     ```
-    
+
     Valid output:
     def my_function():
         ...
@@ -106,7 +104,6 @@ class PytestReportPlugin:
         self.successes: list[TestReport] = []
 
     def pytest_runtest_logreport(self, report):
-
         report_info = {
             "nodeid": report.nodeid,
             "outcome": report.outcome,
@@ -127,7 +124,6 @@ def do_generation_openai(
     fn_name: str,
     test: Callable,
 ) -> str:
-
     system_prompt = _system_template.format(context=DEFAULT_CONTEXT)
 
     test_source = tdg.extractors.strip_decorator(test)
@@ -138,8 +134,6 @@ def do_generation_openai(
     )
 
     choices = _mk_completion(system_prompt=system_prompt, user_prompt=user_prompt)
-
-    failures: list[tuple[str, AssertionError]] = []
 
     for choice in choices:
         code = clean_openai_code(choice.message.content)

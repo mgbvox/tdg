@@ -11,7 +11,7 @@ class Executor:
 
     def run(self, code: str):
         match is_valid_python(code):
-            case True, ast.AST() as node:
+            case True, ast.AST():  # as node (can capture):
                 exec(code, self.env)
             case False, e:
                 raise e

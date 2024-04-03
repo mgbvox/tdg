@@ -14,8 +14,6 @@ import tdg
 #     assert c.find_old_files(c.current_directory() / "old") == ["foo"]
 
 
-from typing import List
-
 def digits_of_pi(n: int) -> str:
     """
     Returns the first n digits of Pi, including the leading 3.
@@ -25,7 +23,7 @@ def digits_of_pi(n: int) -> str:
 
     Returns:
     str: A string representing the first n digits of Pi.
-    
+
     Raises:
     ValueError: If n is less than 1.
 
@@ -36,28 +34,32 @@ def digits_of_pi(n: int) -> str:
 
     if n < 1:
         raise ValueError("Input should be a positive integer greater than 0.")
-    
+
     pi = []
-    pi.append('3')  # The leading digit in Pi
+    pi.append("3")  # The leading digit in Pi
 
     # Skip the integer part already added
     if n == 1:
-        return ''.join(pi)
-    
+        return "".join(pi)
+
     # Initialize variables for BBP formula
     pi_accumulator = 0
     max_j = n + 10
     for k in range(n - 1):
         k8 = 8 * k
-        pi_accumulator += (4 / (k8 + 1) - 2 / (k8 + 4) - 1 / (k8 + 5) - 1 / (k8 + 6)) / (16**k)
-    
-    pi_digits = str(int(pi_accumulator * 10**(n-1)))  # Scale and truncate
-    
-    # In case of rounding errors, make sure we return exactly n digits
-    pi = [pi[0]] + ['0' for _ in range(n - 1)]  # Pre-fill with zeros to ensure length
-    pi[1:] = list(pi_digits)[:n-1]  # Replace starting from index 1 to n-1
+        pi_accumulator += (
+            4 / (k8 + 1) - 2 / (k8 + 4) - 1 / (k8 + 5) - 1 / (k8 + 6)
+        ) / (16**k)
 
-    return ''.join(pi)
+    pi_digits = str(int(pi_accumulator * 10 ** (n - 1)))  # Scale and truncate
+
+    # In case of rounding errors, make sure we return exactly n digits
+    pi = [pi[0]] + ["0" for _ in range(n - 1)]  # Pre-fill with zeros to ensure length
+    pi[1:] = list(pi_digits)[: n - 1]  # Replace starting from index 1 to n-1
+
+    return "".join(pi)
+
+
 @tdg.gen("digits_of_pi")
 def test_do_something_cool():
     assert len(str(digits_of_pi(100))) == 100
