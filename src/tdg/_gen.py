@@ -9,9 +9,9 @@ from typing import Callable, Optional
 import openai
 import pytest
 from _pytest.config import ExitCode
-from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion import Choice
 from pydantic import BaseModel
+import json
 
 from tdg import context_managers as cm
 import tdg.extractors
@@ -94,6 +94,35 @@ def _mk_completion(system_prompt: str, user_prompt: str) -> list[Choice]:
     return out.choices
 
 
+class TestReport(BaseModel):
+    nodeid: str
+    outcome: str
+    longrepr: str
+
+
+class PytestReportPlugin:
+    def __init__(self):
+        self.failures: list[TestReport] = []
+        self.successes: list[TestReport] = []
+
+    def pytest_runtest_logreport(self, report):
+
+        report_info = {
+            "nodeid": report.nodeid,
+            "outcome": report.outcome,
+            "longrepr": str(report.longrepr),
+        }
+        parsed = TestReport.model_validate(report_info)
+        if report.failed:
+            self.failures.append(parsed)
+        else:
+            self.successes.append(parsed)
+
+    def pytest_sessionfinish(self):
+        # Here, you could further process the reports or print them.
+        pass
+
+
 def do_generation_openai(
     fn_name: str,
     test: Callable,
@@ -114,16 +143,22 @@ def do_generation_openai(
 
     for choice in choices:
         code = clean_openai_code(choice.message.content)
-        if is_valid_python(code) and f"def {fn_name}" in code:
+        if is_valid_python(code):
             # in a temporary directory, run a sub-pytest session on the generated code
             with cm.TempDir() as tmpdir:
                 tmp_test_file = tmpdir.root / f"test_{fn_name}.py"
                 tmp_test_file.write_text(code + "\n\n" + test_source)
-                out = pytest.main([str(tmp_test_file)])
-                if out is ExitCode.OK:
+                tracker = PytestReportPlugin()
+                out = pytest.main(
+                    [
+                        str(tmp_test_file),
+                    ],
+                    plugins=[tracker],
+                )
+                if out is ExitCode.OK and tracker.successes and not tracker.failures:
                     return code
                 else:
-                    failures.append(())
+                    raise NotImplementedError("Handle Failures!")
 
 
 class GenHistory(BaseModel):
@@ -147,6 +182,8 @@ class gen:
             return test
         else:
             gen = do_generation_openai(fn_name=self.fn_name, test=test)
+            if not gen:
+                raise ValueError("No valid code was generated!")
             to_modify = Path(inspect.getfile(test))
             src_lines = to_modify.read_text().splitlines()
             fn_start_line = inspect.getsourcelines(test)[1]
@@ -161,4 +198,3 @@ class gen:
             new_content = preceding + injection + succeding
 
             to_modify.write_text(new_content)
-

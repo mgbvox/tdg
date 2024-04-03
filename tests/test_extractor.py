@@ -1,10 +1,10 @@
 import functools
 import inspect
 import textwrap
-from functools import wraps
 from typing import Callable, Optional
 
 import tdg.extractors
+from tdg.extractors import find_definition, code_eq
 
 
 class some_decorator_class:
@@ -55,3 +55,44 @@ def test_rm_decorator_basic():
 
     extracted = tdg.extractors.strip_decorator(bar)
     assert extracted == without_decorator.format(name="bar")
+
+
+def test_find_definition():
+
+    # Example usage
+    code = """
+    x = 5
+    def foo():
+        pass
+    class Bar:
+        def __init__(self, x:int):
+            self.x = x
+        
+        def woot(self):
+            print(self.x)
+    """
+
+    target = """
+        def foo():
+            pass
+        """
+
+    definition = find_definition(code, "foo")
+    assert code_eq(definition, target)
+
+    target = """
+    class Bar:
+        def __init__(self, x:int):
+            self.x = x
+        
+        def woot(self):
+            print(self.x)
+    """
+    definition = find_definition(code, "Bar")
+    assert code_eq(definition, target)
+
+    definition = find_definition(code, "x")
+    assert code_eq(definition, "x = 5")
+
+    definition = find_definition(code, "self.x")
+    assert definition is None
