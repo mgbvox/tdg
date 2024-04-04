@@ -1,7 +1,7 @@
 import ast
 import copy
 
-from tdg.extractors import is_valid_python
+from tdg.parsing import is_valid_python
 
 
 class Executor:

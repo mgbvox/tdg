@@ -4,7 +4,9 @@ import textwrap
 from typing import Callable, Optional
 
 import tdg.extractors
-from tdg.extractors import find_definition, code_eq
+from tdg.extractors.code2str import strip_decorator
+from tdg.extractors.str2str import find_definition
+from tdg.parsing import code_eq
 
 
 class some_decorator_class:
@@ -50,10 +52,10 @@ def test_rm_decorator_basic():
         return BASIC_TARGET
     """
     ).strip()
-    extracted = tdg.extractors.strip_decorator(foo)
+    extracted = strip_decorator(foo)
     assert extracted == without_decorator.format(name="foo")
 
-    extracted = tdg.extractors.strip_decorator(bar)
+    extracted = strip_decorator(bar)
     assert extracted == without_decorator.format(name="bar")
 
 
@@ -67,7 +69,7 @@ def test_find_definition():
     class Bar:
         def __init__(self, x:int):
             self.x = x
-        
+
         def woot(self):
             print(self.x)
     """
@@ -84,7 +86,7 @@ def test_find_definition():
     class Bar:
         def __init__(self, x:int):
             self.x = x
-        
+
         def woot(self):
             print(self.x)
     """

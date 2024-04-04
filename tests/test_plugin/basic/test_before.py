@@ -82,6 +82,51 @@ def returns_2() -> int:
     return 2
 
 
+def returns_2() -> int:
+    """Returns the value 2.
+
+    Returns:
+        int: The value 2.
+    """
+    return 2
+
+
+def returns_2() -> int:
+    """Returns the value 2.
+
+    Returns:
+        int: The value 2.
+    """
+    return 2
+
+
+def returns_2() -> int:
+    """Returns the value 2.
+
+    Returns:
+        int: The value 2.
+    """
+    return 2
+
+
+def returns_2() -> int:
+    """Returns the value 2.
+
+    Returns:
+        int: The value 2.
+    """
+    return 2
+
+
+def returns_2() -> int:
+    """Returns the value 2.
+
+    Returns:
+        int: The value 2.
+    """
+    return 2
+
+
 @tdg.gen("returns_2")
 def test_returns_2():
     assert returns_2() == 2

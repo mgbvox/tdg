@@ -13,9 +13,9 @@ from cs224u_utils.cache import disk_cache
 from openai.types.chat.chat_completion import Choice
 from pydantic import BaseModel
 
-import tdg.extractors
 from tdg import context_managers as cm
 from tdg.config import Settings
+from tdg.extractors.code2str import strip_decorator
 
 _conf = Settings.from_dotenv()
 DEFAULT_CONTEXT = "No Codebase Yet - generate from scratch."
@@ -126,7 +126,7 @@ def do_generation_openai(
 ) -> str:
     system_prompt = _system_template.format(context=DEFAULT_CONTEXT)
 
-    test_source = tdg.extractors.strip_decorator(test)
+    test_source = strip_decorator(test)
 
     user_prompt = _user_template.format(
         test=test_source,
