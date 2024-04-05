@@ -1,4 +1,3 @@
-import ast
 import inspect
 import os
 import uuid
@@ -7,8 +6,6 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import openai
-import pytest
-from _pytest.config import ExitCode
 from cs224u_utils.cache import disk_cache
 from openai.types.chat.chat_completion import Choice
 from pydantic import BaseModel
@@ -16,6 +13,7 @@ from pydantic import BaseModel
 from tdg import context_managers as cm
 from tdg.config import Settings
 from tdg.extractors.code2str import strip_decorator
+from tdg.parsing import is_valid_python
 
 _conf = Settings.from_dotenv()
 DEFAULT_CONTEXT = "No Codebase Yet - generate from scratch."
@@ -52,14 +50,6 @@ Be as efficient as possible, and do not repeat yourself.
 """
 
 
-def is_valid_python(code: str) -> bool:
-    try:
-        ast.parse(code)
-        return True
-    except SyntaxError:
-        return False
-
-
 def clean_openai_code(code: str) -> str:
     code_split = code.strip().splitlines()
     if "```py" in code_split[0]:
@@ -92,34 +82,6 @@ def _mk_completion(system_prompt: str, user_prompt: str) -> list[Choice]:
     return out.choices
 
 
-class TestReport(BaseModel):
-    nodeid: str
-    outcome: str
-    longrepr: str
-
-
-class PytestReportPlugin:
-    def __init__(self):
-        self.failures: list[TestReport] = []
-        self.successes: list[TestReport] = []
-
-    def pytest_runtest_logreport(self, report):
-        report_info = {
-            "nodeid": report.nodeid,
-            "outcome": report.outcome,
-            "longrepr": str(report.longrepr),
-        }
-        parsed = TestReport.model_validate(report_info)
-        if report.failed:
-            self.failures.append(parsed)
-        else:
-            self.successes.append(parsed)
-
-    def pytest_sessionfinish(self):
-        # Here, you could further process the reports or print them.
-        pass
-
-
 def do_generation_openai(
     fn_name: str,
     test: Callable,
@@ -142,17 +104,7 @@ def do_generation_openai(
             with cm.TempDir() as tmpdir:
                 tmp_test_file = tmpdir.root / f"test_{fn_name}.py"
                 tmp_test_file.write_text(code + "\n\n" + test_source)
-                tracker = PytestReportPlugin()
-                out = pytest.main(
-                    [
-                        str(tmp_test_file),
-                    ],
-                    plugins=[tracker],
-                )
-                if out is ExitCode.OK and tracker.successes and not tracker.failures:
-                    return code
-                else:
-                    raise NotImplementedError("Handle Failures!")
+                # ex = TestExecutor()
     return ""
 
 

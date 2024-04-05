@@ -7,6 +7,7 @@
 * Include example base tests with code generation prompt
 * Navigator can perform RAG for algorithm look up, search, etc.
 * Perhaps navigator also tackles pseudocode generation? AB test this.
+* diagram, diagram, diagram
 
 
 ## Later / Ideas

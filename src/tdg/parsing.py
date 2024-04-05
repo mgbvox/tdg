@@ -2,6 +2,8 @@ import ast
 import textwrap
 from typing import Union
 
+import black
+
 
 def parse_code(code: str) -> ast.AST:
     """Parse a code string into a Python AST."""
@@ -27,3 +29,13 @@ def is_valid_python(code: str) -> tuple[bool, Union[ast.AST, SyntaxError]]:
         return True, parsed
     except SyntaxError as e:
         return False, e
+    except Exception as e:
+        raise ValueError(
+            f"Unable to parse input code, and it wasn't a syntax issue.\ncode:\n{code}"
+        ) from e
+
+
+def compile_tests(solution: str, tests: list[str]) -> str:
+    script = "\n".join([solution] + tests)
+    script = black.format_str(script, mode=black.Mode())
+    return script
