@@ -1,9 +1,7 @@
-import inspect
 import os
 import uuid
 from enum import Enum, auto
-from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, TypedDict, Unpack
 
 import openai
 from cs224u_utils.cache import disk_cache
@@ -119,29 +117,41 @@ class Mode(Enum):
     EVAL = auto()
 
 
-class gen:
-    def __init__(self, fn_name: Optional[str] = None):
-        self.fn_name = fn_name or ""
-        self._gen_history: list[GenHistory] = []
+class GenConfig(TypedDict):
+    fn_name: Optional[str]
 
-    def __call__(self, test: Callable):
-        if os.getenv("TDG_MODE") == Mode.EVAL:
-            return test
-        else:
-            gen = do_generation_openai(fn_name=self.fn_name, test=test)
-            if not gen:
-                raise ValueError("No valid code was generated!")
-            to_modify = Path(inspect.getfile(test))
-            src_lines = to_modify.read_text().splitlines()
-            fn_start_line = inspect.getsourcelines(test)[1]
 
-            # account for @tdg.gen decorator
-            fn_start_line -= 1
+def gen(fn: Optional[Callable] = None, **config: Unpack[GenConfig]):
+    if config:
+        pass
 
-            preceding = "\n".join(src_lines[:fn_start_line])
-            injection = "\n" + gen + "\n"
-            succeding = "\n".join(src_lines[fn_start_line:])
+    pass
 
-            new_content = preceding + injection + succeding
 
-            to_modify.write_text(new_content)
+#
+# class gen:
+#     def __init__(self, fn_name: Optional[str] = None):
+#         self.fn_name = fn_name or ""
+#         self._gen_history: list[GenHistory] = []
+#
+#     def __call__(self, test: Callable):
+#         if os.getenv("TDG_MODE") == Mode.EVAL:
+#             return test
+#         else:
+#             gen = do_generation_openai(fn_name=self.fn_name, test=test)
+#             if not gen:
+#                 raise ValueError("No valid code was generated!")
+#             to_modify = Path(inspect.getfile(test))
+#             src_lines = to_modify.read_text().splitlines()
+#             fn_start_line = inspect.getsourcelines(test)[1]
+#
+#             # account for @tdg.gen decorator
+#             fn_start_line -= 1
+#
+#             preceding = "\n".join(src_lines[:fn_start_line])
+#             injection = "\n" + gen + "\n"
+#             succeding = "\n".join(src_lines[fn_start_line:])
+#
+#             new_content = preceding + injection + succeding
+#
+#             to_modify.write_text(new_content)

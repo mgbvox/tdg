@@ -10,8 +10,6 @@ from tdg.parse_humaneval import (
     HEPItem,
 )
 
-LIMIT = 500
-
 
 @pytest.fixture(params=parse_hep())
 def hep(request) -> HEPItem:

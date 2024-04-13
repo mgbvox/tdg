@@ -1,6 +1,7 @@
 import ast
+import inspect
 import textwrap
-from typing import Optional
+from typing import Optional, Callable, Union
 
 from tdg.parsing import parse_code
 
@@ -71,3 +72,37 @@ class DefinitionFinder(ast.NodeVisitor):
             if isinstance(target, ast.Name) and target.id == self.name:
                 self.definition = node
         self.generic_visit(node)
+
+
+class GenericVisitor(ast.NodeVisitor):
+    def __init__(self, callback: Callable[[ast.AST], None]):
+        self.callback = callback
+
+    def generic_visit(self, node: ast.AST):
+        self.callback(node)
+        super().generic_visit(node)
+
+    def visit_code(self, code: Union[str, Callable]):
+        if callable(code):
+            code = inspect.getsource(code)
+        try:
+            self.visit(ast.parse(code))
+            return self
+        except IndentationError:
+            return self.visit_code(textwrap.dedent(code))
+
+
+class UndefinedFinder(GenericVisitor):
+    def __init__(self, globals_: dict, locals_: dict):
+        self.defined: set[str] = set()
+        self.defined.update(set(globals_.keys()))
+        self.defined.update(set(locals_.keys()))
+
+        self.undefined: set[str] = set()
+
+        super().__init__(self.log_undefined)
+
+    def log_undefined(self, node: ast.AST):
+        name = getattr(node, "name", None) or getattr(node, "id", None)
+        if name and name not in self.defined:
+            self.undefined.add(name)

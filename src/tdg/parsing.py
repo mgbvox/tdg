@@ -35,7 +35,11 @@ def is_valid_python(code: str) -> tuple[bool, Union[ast.AST, SyntaxError]]:
         ) from e
 
 
+def format_code(code: str) -> str:
+    return black.format_str(code, mode=black.Mode())
+
+
 def compile_tests(solution: str, tests: list[str]) -> str:
     script = "\n".join([solution] + tests)
-    script = black.format_str(script, mode=black.Mode())
+    script = format_code(script)
     return script
