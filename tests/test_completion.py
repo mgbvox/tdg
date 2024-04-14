@@ -41,7 +41,7 @@ def factorial_test():
 
 
 def test_parse_doc():
-    ingested = find_gen_signatures(something_test.__doc__)['something']
+    ingested = find_gen_signatures(something_test.__doc__)["something"]
     target = """
     def something(input: int) -> str:
         '''A cool function.'''

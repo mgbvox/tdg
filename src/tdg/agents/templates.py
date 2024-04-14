@@ -40,11 +40,11 @@ class SystemTemplate(Template):
         return textwrap.dedent(
             f"""
             You are a Pair Programming agent in a multi-agent environment.
-            
+
             Your role is "{self.role}."
-            
+
             {self.description}
-            
+
             {extra}
             """
         )
@@ -56,7 +56,7 @@ class GenerationPrompt(Template):
     tests: list[str] = Field(default_factory=list)
     additional_objects: list[str] = Field(default_factory=list)
 
-    command:str = ""
+    command: str = ""
 
     def render(self):
         target_ctx = ""
@@ -92,16 +92,16 @@ class GenerationPrompt(Template):
         combined = textwrap.dedent(
             f"""
             A user wants to generate some code. This code will need to pass a series of unit tests.
-            
+
             The code that needs to be generated must satisfy the following prompt:
             {self.prompt}
-            
+
             {target_ctx}
-            
+
             {additional_ctx}
-            
+
             {test_ctx}
-            
+
             {self.command}
             """
         )
