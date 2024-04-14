@@ -3,8 +3,6 @@ import inspect
 import textwrap
 from typing import Optional, Callable, Union
 
-from tdg.parsing import parse_code
-
 
 def find_definition(code: str, name: str) -> Optional[str]:
     """
@@ -17,12 +15,8 @@ def find_definition(code: str, name: str) -> Optional[str]:
     Returns:
         Optional[str]: The portion of the code that defines `name`, or `None` if no definition exists.
     """
-    ast_module = parse_code(code)
-    finder = DefinitionFinder(name)
-    finder.visit(ast_module)
-    if definition := finder.definition:
-        return get_node_source(code, definition)
-    return None
+
+    return DefinitionFinder(name).visit_code(code).definition_source
 
 
 def get_node_source(code: str, node: ast.AST) -> str:
@@ -45,51 +39,44 @@ def get_node_source(code: str, node: ast.AST) -> str:
     return "\n".join(node_source)
 
 
-class DefinitionFinder(ast.NodeVisitor):
-    def __init__(self, name):
-        self.name = name
-        self.definition = None
-
-    def visit_FunctionDef(self, node):
-        if node.name == self.name:
-            self.definition = node
-        self.generic_visit(node)
-
-    def visit_AsyncFunctionDef(self, node):
-        if node.name == self.name:
-            self.definition = node
-        self.generic_visit(node)
-
-    def visit_ClassDef(self, node):
-        if node.name == self.name:
-            self.definition = node
-        self.generic_visit(node)
-
-    def visit_Assign(self, node):
-        # Handle variable assignment. Variables can be assigned in different ways,
-        # e.g., a single name or a tuple of names. This is a simple example.
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == self.name:
-                self.definition = node
-        self.generic_visit(node)
-
-
 class GenericVisitor(ast.NodeVisitor):
     def __init__(self, callback: Callable[[ast.AST], None]):
         self.callback = callback
+        self.source: Optional[str] = None
+        self.ast: Optional[ast.AST] = None
 
     def generic_visit(self, node: ast.AST):
         self.callback(node)
         super().generic_visit(node)
 
-    def visit_code(self, code: Union[str, Callable]):
-        if callable(code):
+    def visit_code(self, code: Union[str, type, Callable]):
+        if not isinstance(code, str):
             code = inspect.getsource(code)
+
         try:
-            self.visit(ast.parse(code))
+            self.source = code
+            parsed = ast.parse(code)
+            self.ast = parsed
+            self.visit(parsed)
             return self
         except IndentationError:
             return self.visit_code(textwrap.dedent(code))
+
+
+class DefinitionFinder(GenericVisitor):
+    def __init__(self, name):
+        self.name = name
+        self.definition = None
+        super().__init__(self.find_definition)
+
+    def find_definition(self, node: ast.AST):
+        if getattr(node, "name", getattr(node, "id", "")) == self.name:
+            self.definition = node
+
+    @property
+    def definition_source(self) -> Optional[str]:
+        if self.source and self.definition:
+            return ast.get_source_segment(self.source, self.definition)
 
 
 class UndefinedFinder(GenericVisitor):

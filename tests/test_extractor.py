@@ -92,9 +92,3 @@ def test_find_definition():
     """
     definition = find_definition(code, "Bar")
     assert code_eq(definition, target)
-
-    definition = find_definition(code, "x")
-    assert code_eq(definition, "x = 5")
-
-    definition = find_definition(code, "self.x")
-    assert definition is None

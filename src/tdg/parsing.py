@@ -1,8 +1,12 @@
 import ast
+import functools
+import re
 import textwrap
-from typing import Union
+from typing import Union, Any
 
 import black
+import yaml
+from yaml.scanner import ScannerError
 
 
 def parse_code(code: str) -> ast.AST:
@@ -43,3 +47,73 @@ def compile_tests(solution: str, tests: list[str]) -> str:
     script = "\n".join([solution] + tests)
     script = format_code(script)
     return script
+
+
+gen_pattern = re.compile(
+    r"/gen(.*?)/end[_]gen", re.DOTALL + re.MULTILINE + re.IGNORECASE
+)
+
+
+def dict_flat(inp: list[dict[Any, Any]]) -> dict[Any, Any]:
+    """Flatten a list of dicts into one large dict."""
+    return functools.reduce(lambda x, y: {**x, **y}, inp, {})
+
+
+def find_gen_signatures(doc: str) -> dict[str, str]:
+    """
+    Extract generation context from the docstring of a test function.
+
+    You may provide generation context in yaml format, delimited by /gen ... /endgen:
+
+        ...random docstring contents...
+        /gen
+            <target_name>:
+                - args:
+                    - arg_1_name: arg_1_type
+                    - arg_2_name: arg_2_type
+                ...
+        /end_gen
+
+    Kwargs support not included (wip).
+
+    This can be used to specify the desired structure of the object(s) to be generated.
+
+    If this is not used, the entire docstring will be extracted for context.
+
+    Args:
+        doc: The docstring of a test function.
+
+    """
+    if not doc:
+        return {}
+    if match := gen_pattern.search(doc):
+        data = match.group(1)
+        try:
+            parsed = yaml.safe_load(data)
+            sigs = {}
+            for name, data in parsed.items():
+                match data:
+                    case list():
+                        data = dict_flat(data)
+                    case dict():
+                        continue
+                    case _:
+                        raise TypeError("Unexpected value type in yaml!")
+                arg_sigs = []
+                for arg in data.get("args"):
+                    for argname, argtype in arg.items():
+                        arg_sigs.append(f"{argname}: {argtype}")
+
+                argdef = ",".join(arg_sigs)
+
+                fndef = f"def {name}({argdef}) -> {data.get('returns', '...')}:"
+                if doc := data.get("doc"):
+                    fndef = f"{fndef}\n\t'''{doc}'''"
+                fndef += "\n\t..."
+                fndef = format_code(fndef)
+
+                sigs[name] = fndef
+
+            return sigs
+        except ScannerError:
+            pass
