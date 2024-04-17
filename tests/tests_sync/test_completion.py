@@ -1,15 +1,7 @@
-import yaml
-
 from tdg import parsing
-from tdg.agents import NavAgent
+from tdg.agents import NavAgentPre
 from tdg.extractors.str2str import UndefinedFinder
 from tdg.parsing import find_gen_signatures
-from tests import test_root
-
-
-def test_parse_yaml():
-    loaded = yaml.safe_load((test_root / "test_gen_config.yaml").read_text())
-    assert loaded
 
 
 def something_test():
@@ -81,24 +73,16 @@ def test_extract_undefined_objects_from_code():
     ).undefined == {"factorial"}
 
 
-def test_nav_agent():
-    nav_agent = NavAgent(factorial_test)
+def test_nav_agent_first_pass():
+    nav_agent = NavAgentPre(factorial_test)
     assert nav_agent.undefined == {"factorial"}
     assert len(nav_agent.signatures) == 1
     assert "def factorial(input: int) -> int:" in nav_agent.signatures["factorial"]
 
-    prompt = nav_agent._gen_prompt_first_pass()
+    prompt = nav_agent.user_prompt()
     for name, sig in nav_agent.signatures.items():
         assert name in prompt
         for line in sig.splitlines():
             assert line.strip() in prompt
 
     print(prompt)
-
-
-def test_dev_agent():
-    pass
-
-
-def test_test_agent():
-    pass

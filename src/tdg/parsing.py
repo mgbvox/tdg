@@ -65,14 +65,17 @@ def find_gen_signatures(doc: str) -> dict[str, str]:
 
     You may provide generation context in yaml format, delimited by /gen ... /endgen:
 
-        ...random docstring contents...
+    def test_some_function():
+        '''
         /gen
             <target_name>:
+                - doc: <natural language description of target function>
                 - args:
                     - arg_1_name: arg_1_type
                     - arg_2_name: arg_2_type
                 ...
         /end_gen
+        '''
 
     Kwargs support not included (wip).
 
@@ -117,3 +120,12 @@ def find_gen_signatures(doc: str) -> dict[str, str]:
             return sigs
         except ScannerError:
             pass
+
+
+def clean_openai_code(code: str) -> str:
+    code_split = code.strip().splitlines()
+    if "```py" in code_split[0]:
+        code_split = code_split[1:]
+    if "```" in code_split[-1]:
+        code_split = code_split[:-1]
+    return "\n".join(code_split)

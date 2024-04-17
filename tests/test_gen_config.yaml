@@ -1,6 +1,0 @@
-gen: factorial
-
-factorial:
-  - doc: An efficient python implementation of the factorial function.
-  - int
-  - depth: int

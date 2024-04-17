@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from tdg import context_managers as cm
 from tdg.config import Settings
 from tdg.extractors.code2str import strip_decorator
-from tdg.parsing import is_valid_python
+from tdg.parsing import is_valid_python, clean_openai_code
 
 _conf = Settings.from_dotenv()
 DEFAULT_CONTEXT = "No Codebase Yet - generate from scratch."
@@ -46,15 +46,6 @@ Be as efficient as possible, and do not repeat yourself.
 
 {test}
 """
-
-
-def clean_openai_code(code: str) -> str:
-    code_split = code.strip().splitlines()
-    if "```py" in code_split[0]:
-        code_split = code_split[1:]
-    if "```" in code_split[-1]:
-        code_split = code_split[:-1]
-    return "\n".join(code_split)
 
 
 def eval_init():

@@ -1,5 +1,10 @@
 from .base import Agent
-from .nav import NavAgent
+from .nav import NavAgentPre
+from .test import TestAgent
 
 
-__all__ = ["NavAgent"]
+__all__ = [
+    "Agent",
+    "NavAgentPre",
+    "TestAgent",
+]
