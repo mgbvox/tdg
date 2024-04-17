@@ -75,8 +75,8 @@ def test_extract_undefined_objects_from_code():
 
 def test_nav_agent_first_pass():
     nav_agent = NavAgentPre(factorial_test)
-    assert nav_agent.undefined == {"factorial"}
-    assert len(nav_agent.signatures) == 1
+    assert nav_agent.context.undefined == {"factorial"}
+    assert len(nav_agent.context.signatures) == 1
     assert "def factorial(input: int) -> int:" in nav_agent.signatures["factorial"]
 
     prompt = nav_agent.user_prompt()

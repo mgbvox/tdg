@@ -50,6 +50,8 @@ class TestExecutor:
         self.script = script
         self.tracker = PytestReportPlugin()
 
+        self.exit_code: int | ExitCode = -1
+
     def test(self):
         """Invoke the provided test script"""
 
@@ -63,3 +65,6 @@ class TestExecutor:
                 plugins=[self.tracker],
             )
             self.exit_code = out
+
+    def passed(self) -> bool:
+        return self.exit_code == ExitCode.OK

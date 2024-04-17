@@ -4,8 +4,11 @@ from unittest.mock import patch
 
 import pytest
 
+from tdg import parsing
 from tdg.agents import NavAgentPre, TestAgent
 from tdg.agents.dev import DevAgent
+from tdg.agents.templates import nl_join
+from tdg.executors.test import TestExecutor
 from tdg.parsing import is_valid_python
 from tests.test_async import completions
 
@@ -96,7 +99,7 @@ async def tdd_agent(nav_pre):
 
 
 async def test_dev_agent(tdd_agent):
-    old = await tdd_agent.gen()
+    _ = await tdd_agent.gen()
 
     dev_agent = DevAgent(test_agent=tdd_agent)
 
@@ -110,3 +113,30 @@ async def test_dev_agent(tdd_agent):
     assert parsed
     assert isinstance(ast_or_error, ast.AST)
     print(response)
+
+
+@pytest.fixture
+async def dev_agent(tdd_agent):
+    _ = await tdd_agent.gen()
+
+    dev_agent = DevAgent(test_agent=tdd_agent)
+
+    mockCompletion = mock.MagicMock()
+    mockCompletion.choices[0].message.content = completions.DEVELOPER_COMPLETION
+    with patch("tdg.agents.dev.DevAgent._do_generation", return_value=mockCompletion):
+        yield dev_agent
+
+
+async def test_test_execution(tdd_agent, dev_agent):
+    _ = await dev_agent.gen()
+
+    ex = TestExecutor(
+        script=parsing.format_code(
+            nl_join(
+                dev_agent.gen_response,
+                tdd_agent.gen_response,
+            )
+        ),
+    )
+    ex.test()
+    assert ex.passed()
