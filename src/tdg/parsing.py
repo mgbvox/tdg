@@ -1,12 +1,18 @@
+import _ast
 import ast
 import functools
+import importlib
+import importlib.util
 import re
 import textwrap
-from typing import Union, Any
+from pathlib import Path
+from typing import Union, Any, Type, Unpack
 
 import black
 import yaml
 from yaml.scanner import ScannerError
+
+from tdg.extract import NodeSourceFinder, FinderConfig, TestFinder
 
 
 def parse_code(code: str) -> ast.AST:
@@ -43,10 +49,116 @@ def format_code(code: str) -> str:
     return black.format_str(code, mode=black.Mode())
 
 
-def compile_tests(solution: str, tests: list[str]) -> str:
-    script = "\n".join([solution] + tests)
+def compile_tests(
+    tests: list[str],
+    *,
+    imports: list[str] = None,
+    implementations: list[str] = None,
+) -> str:
+    imports = imports or ["import pytest"]
+    implementations = implementations or []
+    script = nl_join(*imports, *implementations, *tests)
     script = format_code(script)
     return script
+
+
+@functools.lru_cache(None)
+def _extract_nodes(
+    code: Union[str, Path],
+    *types_: Type[_ast.stmt],
+    **kwargs: Unpack[FinderConfig],
+) -> list[str]:
+    if isinstance(code, Path):
+        code = code.read_text()
+    finder = NodeSourceFinder(*types_, **kwargs).visit_code(code)
+    return finder.node_sources
+
+
+def extract_imports(code: str, **kwargs: Unpack[FinderConfig]) -> list[str]:
+    return _extract_nodes(
+        code,
+        ast.Import,
+        ast.ImportFrom,
+        **kwargs,
+    )
+
+
+def extract_and_filter_imports(code: str) -> list[str]:
+    return filter_imports(*extract_imports(code))
+
+
+@functools.lru_cache(None)
+def filter_imports(*imports: str, invert: bool = False) -> list[str]:
+    """Given a list of import statements, return only the statements that import from
+    modules in the current interpreter path.
+
+    Args:
+    imports (list[str]): A list of import statements as strings.
+    invert: If true, return only the statements that are invalid as imports.
+
+    Returns:
+    list[str]: A list of import statements that refer to modules available in the
+               current Python interpreter's environment.
+    """
+    filtered_imports = set()
+    invalid_imports = set()
+
+    for import_statement in imports:
+        try:
+            # Parse the import statement into an AST
+            parsed = extract_imports(import_statement, as_node=True)
+        except SyntaxError:
+            # If parsing fails, log as invalid and skip this statement
+            invalid_imports.add(import_statement)
+            continue
+
+        # Loop through the body of the parsed AST
+        for node in parsed:
+            # map module names to any imported submodules
+            modules_map = {}
+
+            if isinstance(node, ast.Import):
+                # (no_package, module)
+                for alias in node.names:
+                    modules_map[alias.name] = []
+            elif isinstance(node, ast.ImportFrom):
+                # (package, module)
+                modules_map[node.module] = [alias.name for alias in node.names]
+
+            else:
+                continue  # Skip any non-import statements
+
+            # Check if these modules can be found by the interpreter
+
+            for key, values in modules_map.items():
+                # if importlib.util.find_spec(module_name) is not None:
+                try:
+                    module = importlib.import_module(key)
+                    if values:
+                        for value in values:
+                            try:
+                                _ = getattr(module, value)
+                            except AttributeError:
+                                raise ModuleNotFoundError(
+                                    f"Module {key} has no attribute {value}"
+                                )
+                    # if we've gotten this far, the module, and all submodules (if any),
+                    # are importable - add this as a valid import statement!
+                    filtered_imports.add(import_statement)
+
+                except ModuleNotFoundError:
+                    # import not available in current namespace; is invalid
+                    invalid_imports.add(import_statement)
+
+    if invert:
+        return sorted(list(invalid_imports))
+    return sorted(list(filtered_imports))
+
+
+def extract_tests(
+    code: Union[str, Path],
+) -> list[str]:
+    return TestFinder().visit_code(code).tests
 
 
 gen_pattern = re.compile(
@@ -120,6 +232,7 @@ def find_gen_signatures(doc: str) -> dict[str, str]:
             return sigs
         except ScannerError:
             pass
+    return {}
 
 
 def clean_openai_code(code: str) -> str:
@@ -129,3 +242,7 @@ def clean_openai_code(code: str) -> str:
     if "```" in code_split[-1]:
         code_split = code_split[:-1]
     return "\n".join(code_split)
+
+
+def nl_join(*args: str) -> str:
+    return "\n".join(args)

@@ -1,12 +1,15 @@
 import functools
 import inspect
 import textwrap
+from pathlib import Path
 from typing import Callable, Optional
 
-import tdg.extractors
-from tdg.extractors.code2str import strip_decorator
-from tdg.extractors.str2str import find_definition
+from tdg.executors.test import TestExecutor
+from tdg.extract import strip_decorator, find_definition
+
+from tdg import parsing
 from tdg.parsing import code_eq
+from tests import completions
 
 
 class some_decorator_class:
@@ -92,3 +95,78 @@ def test_find_definition():
     """
     definition = find_definition(code, "Bar")
     assert code_eq(definition, target)
+
+
+def test_extract_test_source():
+    source = Path(__file__).parent / "extractor_data" / "demo_test_suite.txt"
+    source = source.read_text()
+
+    tests = parsing.extract_tests(source)
+    assert len(tests) == 5
+
+
+def test_filter_imports():
+
+    good = [
+        # import third party
+        "import pydantic",
+        # import this package
+        "import tdg",
+        # import submodule
+        "from pydantic import BaseModel",
+        # dotted import from
+        "from pydantic.config import BaseConfig",
+        # this package dotted import from
+        "from tdg.config import Settings",
+        # dotted comma import from
+        "from tdg.parsing import extract_imports, extract_tests",
+        # multiline dotted comma import from
+        textwrap.dedent(
+            """
+            from tdg.parsing import (
+            extract_imports,
+            extract_tests,
+            )
+            """
+        ),
+    ]
+
+    bad = [
+        # bad module
+        "import bad_doesnt_exist",
+        # bad syntax
+        "1234 I am _ not code",
+        # good module, bad submodule
+        "from tdg import whoops",
+        # dotted module.submodule, bad attribute
+        "from tdg.parsing import oh_no",
+        # comma imports, one is bad
+        "from tdg.parsing import extract_imports, extract_tacos, extract_tests",
+        # multiline import
+        textwrap.dedent(
+            """
+            from tdg.parsing import (
+            extract_imports,
+            extract_tests,
+            extract_tacos,
+            )
+            """
+        ),
+    ]
+
+    assert parsing.filter_imports(*(good + bad)) == sorted(good)
+    assert parsing.filter_imports(*(good + bad), invert=True) == sorted(bad)
+
+
+def test_extract_test_source_filter_valid_imports():
+    source = Path(__file__).parent / "extractor_data" / "demo_test_suite.txt"
+    source = source.read_text()
+
+    imports = parsing.extract_and_filter_imports(source)
+    tests = parsing.extract_tests(source)
+    script = parsing.compile_tests(
+        tests, imports=imports, implementations=[completions.DEVELOPER_COMPLETION]
+    )
+
+    tested = TestExecutor(script=script).test()
+    assert tested.passed()

@@ -1,7 +1,26 @@
+import _ast
 import ast
 import inspect
 import textwrap
-from typing import Optional, Callable, Union
+from typing import Callable, Optional, Union, Type, TypedDict, Unpack
+
+
+def strip_decorator(func: Callable) -> str:
+    # Get the source code of the function including decorators
+    source_code_with_decorators = inspect.getsource(func)
+
+    # Process the source to remove decorator lines
+    source_lines = source_code_with_decorators.splitlines()
+    # Find the first line that does not start with @ (assumes decorators start with @)
+    first_non_decorator_line_index = next(
+        i for i, line in enumerate(source_lines) if not line.strip().startswith("@")
+    )
+    # Join the remaining lines to get the body without decorators
+    body_without_decorators = textwrap.dedent(
+        "\n".join(source_lines[first_non_decorator_line_index:])
+    )
+
+    return body_without_decorators.strip()
 
 
 def find_definition(code: str, name: str) -> Optional[str]:
@@ -93,3 +112,36 @@ class UndefinedFinder(GenericVisitor):
         name = getattr(node, "name", None) or getattr(node, "id", None)
         if name and name not in self.defined:
             self.undefined.add(name)
+
+
+class FinderConfig(TypedDict):
+    as_node: bool
+
+
+class NodeSourceFinder(GenericVisitor):
+    def __init__(self, *valid_types: Type[_ast.stmt], **config: Unpack[FinderConfig]):
+        self.valid_types = valid_types
+        self.node_sources: list[str] = []
+        self.config = config
+        super().__init__(self.find_node_sources)
+
+    def find_node_sources(self, node: ast.AST):
+        if any(isinstance(node, type_) for type_ in self.valid_types):
+            self.node_sources.append(
+                node
+                if self.config.get("as_node")
+                else get_node_source(self.source, node)
+            )
+
+
+class TestFinder(GenericVisitor):
+    def __init__(self, test_prefix: str = "test_"):
+        self.tests: list[str] = []
+        self._test_prefix = test_prefix
+        super().__init__(self.log_tests)
+
+    def log_tests(self, node: ast.AST):
+        match node:
+            case ast.FunctionDef() | ast.AsyncFunctionDef():
+                if node.name.startswith(self._test_prefix):
+                    self.tests.append(ast.get_source_segment(self.source, node))

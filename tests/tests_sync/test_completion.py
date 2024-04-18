@@ -1,6 +1,6 @@
 from tdg import parsing
-from tdg.agents import NavAgentPre
-from tdg.extractors.str2str import UndefinedFinder
+from tdg.agents import NavAgent
+from tdg.extract import UndefinedFinder
 from tdg.parsing import find_gen_signatures
 
 
@@ -74,13 +74,13 @@ def test_extract_undefined_objects_from_code():
 
 
 def test_nav_agent_first_pass():
-    nav_agent = NavAgentPre(factorial_test)
+    nav_agent = NavAgent(factorial_test)
     assert nav_agent.context.undefined == {"factorial"}
     assert len(nav_agent.context.signatures) == 1
     assert "def factorial(input: int) -> int:" in nav_agent.signatures["factorial"]
 
     prompt = nav_agent.user_prompt()
-    for name, sig in nav_agent.signatures.items():
+    for name, sig in nav_agent.context.signatures.items():
         assert name in prompt
         for line in sig.splitlines():
             assert line.strip() in prompt

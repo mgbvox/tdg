@@ -1,5 +1,6 @@
 import random
 import string
+from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -44,10 +45,11 @@ class TestExecutor:
     A class for executing test cases and tracking results.
     """
 
-    def __init__(self, script: str):
+    def __init__(self, script: str, path: Optional[Path] = None):
         if not is_valid_python(script):
             raise ValueError(f"Script was not valid python code:\n\n{script}")
         self.script = script
+        self.path = path
         self.tracker = PytestReportPlugin()
 
         self.exit_code: int | ExitCode = -1
@@ -56,15 +58,18 @@ class TestExecutor:
         """Invoke the provided test script"""
 
         with cm.TempDir() as tmpdir:
-            uuid = "".join(random.choices(string.ascii_letters, k=12))
-            tmp_test_file = tmpdir.root / f"test_cases_{uuid}.py"
-            tmp_test_file.write_text(self.script)
+            if not self.path:
+                uuid = "".join(random.choices(string.ascii_letters, k=12))
+                tmp_test_file = tmpdir.root / f"test_cases_{uuid}.py"
+                tmp_test_file.write_text(self.script)
+                self.path = tmp_test_file
 
             out = pytest.main(
-                [str(tmp_test_file), "-vvv"],
+                [str(self.path), "-vvv"],
                 plugins=[self.tracker],
             )
             self.exit_code = out
+        return self
 
     def passed(self) -> bool:
         return self.exit_code == ExitCode.OK

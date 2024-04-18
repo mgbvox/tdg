@@ -1,6 +1,18 @@
 import abc
+import importlib
 
 from pydantic import BaseModel, Field
+
+from tdg.parsing import nl_join
+
+
+def list_installed_packages():
+    # Retrieves a list of all installed packages and their versions
+    distributions = importlib.metadata.distributions()
+    # Creates a comma-separated list of package names
+    package_list = ", ".join(sorted(dist.name for dist in distributions))
+    return package_list
+
 
 PERFORMANCE_CRITICAL = """
 Please also note that you are running in a performance-critical environment; your generated responses should be:
@@ -18,15 +30,14 @@ You should avoid:
     * meta-commentary on the problem
 """
 
-CODE_GENERATOR = """
+CODE_GENERATOR = f"""
 IMPORTANT: Your output will be passed directly to a python interpreter.
 As such, you should *only* output code; any commentary you provide should
 be in the form of # python comments or docstrings.
+
+If you need to import a library, you should only import packages that are already installed on this system; those are:
+{list_installed_packages()}
 """
-
-
-def nl_join(*args: str) -> str:
-    return "\n".join(args)
 
 
 class Template(BaseModel, abc.ABC):

@@ -1,0 +1,22 @@
+import pytest
+# Assuming the user's test is encapsulated in a function as provided
+from user_code import factorial  # This import assumes the user will implement factorial in a module named user_code
+def test_factorial_base_case():
+    """Test factorial function with base case."""
+    assert factorial(0) == 1, "Factorial of 0 should be 1"
+def test_factorial_positive_integers():
+    """Test factorial function with various positive integers."""
+    assert factorial(4) == 24, "Factorial of 4 should be 24"
+    assert factorial(5) == 120, "Factorial of 5 should be 120"
+    assert factorial(6) == 720, "Factorial of 6 should be 720"
+def test_factorial_large_number():
+    """Test factorial function with a large number to ensure function efficiency."""
+    assert factorial(20) == 2432902008176640000, "Factorial of 20 should be 2432902008176640000"
+def test_factorial_negative_input():
+    """Test factorial function with a negative input to check error handling."""
+    with pytest.raises(ValueError):
+        factorial(-1)
+def test_factorial_non_integer_input():
+    """Test factorial function with non-integer input to check type error handling."""
+    with pytest.raises(TypeError):
+        factorial(4.5)

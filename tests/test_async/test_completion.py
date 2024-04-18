@@ -5,12 +5,12 @@ from unittest.mock import patch
 import pytest
 
 from tdg import parsing
-from tdg.agents import NavAgentPre, TestAgent
+from tdg.agents import NavAgent, TestAgent
 from tdg.agents.dev import DevAgent
-from tdg.agents.templates import nl_join
 from tdg.executors.test import TestExecutor
-from tdg.parsing import is_valid_python
-from tests.test_async import completions
+from tdg.parsing import is_valid_python, nl_join
+from tdg.pipeline import Pipeline
+from tests import completions
 
 
 def something_test():
@@ -42,7 +42,7 @@ def factorial_test():
 
 
 async def test_nav_agent_response():
-    nav_agent = NavAgentPre(factorial_test)
+    nav_agent = NavAgent(factorial_test)
 
     mockCompletion = mock.MagicMock()
     mockCompletion.choices[0].message.content = completions.NAV_PRE_COMPLETION
@@ -50,14 +50,22 @@ async def test_nav_agent_response():
     with patch(
         "tdg.agents.nav.NavAgentPre._do_generation", return_value=mockCompletion
     ):
-        response = await nav_agent.gen()
-    assert response
-    print(response)
+        response = await nav_agent.initial_generation()
+
+    assert response.nav_response is not None
+    assert response.nav_response != ""
+    print(response.nav_response)
+
+
+async def test_nav_agent_response_if_already_generated():
+    nav_agent = NavAgent(factorial_test)
+    nav_agent.context.nav_response = "tacos"
+    assert (await nav_agent.initial_generation()).nav_response == "tacos"
 
 
 @pytest.fixture
-async def nav_pre() -> NavAgentPre:
-    nav_agent = NavAgentPre(factorial_test)
+async def nav_pre() -> NavAgent:
+    nav_agent = NavAgent(factorial_test)
 
     mockCompletion = mock.MagicMock()
     mockCompletion.choices[0].message.content = completions.NAV_PRE_COMPLETION
@@ -69,15 +77,14 @@ async def nav_pre() -> NavAgentPre:
 
 
 async def test_test_agent(nav_pre):
-    _ = await nav_pre.gen()
 
     mockCompletion = mock.MagicMock()
     mockCompletion.choices[0].message.content = completions.TEST_DESIGNER_COMPLETION
 
-    test_agent = TestAgent(nav_pre=nav_pre)
+    test_agent = TestAgent(await nav_pre.initial_generation())
 
     with patch("tdg.agents.test.TestAgent._do_generation", return_value=mockCompletion):
-        response = await test_agent.gen()
+        response = await test_agent.initial_generation()
     assert response
     parsed, ast_or_error = is_valid_python(response)
     assert parsed
@@ -87,7 +94,7 @@ async def test_test_agent(nav_pre):
 
 @pytest.fixture
 async def tdd_agent(nav_pre):
-    _ = await nav_pre.gen()
+    _ = await nav_pre.initial_generation()
 
     test_agent = TestAgent(nav_pre=nav_pre)
 
@@ -99,14 +106,14 @@ async def tdd_agent(nav_pre):
 
 
 async def test_dev_agent(tdd_agent):
-    _ = await tdd_agent.gen()
+    _ = await tdd_agent.initial_generation()
 
     dev_agent = DevAgent(test_agent=tdd_agent)
 
     mockCompletion = mock.MagicMock()
     mockCompletion.choices[0].message.content = completions.DEVELOPER_COMPLETION
     with patch("tdg.agents.dev.DevAgent._do_generation", return_value=mockCompletion):
-        response = await dev_agent.gen()
+        response = await dev_agent.initial_generation()
 
     assert response
     parsed, ast_or_error = is_valid_python(response)
@@ -117,9 +124,8 @@ async def test_dev_agent(tdd_agent):
 
 @pytest.fixture
 async def dev_agent(tdd_agent):
-    _ = await tdd_agent.gen()
 
-    dev_agent = DevAgent(test_agent=tdd_agent)
+    dev_agent = DevAgent(await tdd_agent.initial_generation())
 
     mockCompletion = mock.MagicMock()
     mockCompletion.choices[0].message.content = completions.DEVELOPER_COMPLETION
@@ -128,7 +134,7 @@ async def dev_agent(tdd_agent):
 
 
 async def test_test_execution(tdd_agent, dev_agent):
-    _ = await dev_agent.gen()
+    _ = await dev_agent.initial_generation()
 
     ex = TestExecutor(
         script=parsing.format_code(

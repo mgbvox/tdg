@@ -1,16 +1,20 @@
 from openai.types.chat import ChatCompletion
 
 from tdg import parsing
-from tdg.agents import Agent, NavAgentPre, templates
-from tdg.agents.base import CodeAgent
-from tdg.agents.templates import nl_join
+from tdg.agents import Agent, NavAgent, templates
+from tdg.agents.base import CodeAgent, CodeContext, Message
+from tdg.parsing import nl_join
 
 
 class TestAgent(CodeAgent):
-    def __init__(self, nav_pre: NavAgentPre):
+    def __init__(self, nav_response: Message, code_context: CodeContext):
         super().__init__()
-        self.nav_response = nav_pre.gen_response
-        self.context = nav_pre.context
+
+        self.code_context = code_context
+        self.nav_response = nav_response
+
+        self.tests: list[str] = []
+        self.imports: list[str] = []
 
     def system_prompt(self) -> str:
         return templates.SystemTemplate(
@@ -29,7 +33,7 @@ class TestAgent(CodeAgent):
                     "The reasoning provided by the Navigator role is the following - please take this into account",
                     "when generating your response.",
                     "Navigator Reasoning:",
-                    self.nav_response,
+                    self.nav_response.content,
                 ),
                 templates.CODE_GENERATOR,
             ],
@@ -37,9 +41,9 @@ class TestAgent(CodeAgent):
 
     def user_prompt(self) -> str:
         return templates.GenerationPrompt(
-            targets=self.context.signatures,
-            additional_objects=self.context.undefined,
-            tests=[self.context.test_source],
+            targets=self.code_context.signatures,
+            additional_objects=self.code_context.undefined,
+            tests=[self.code_context.test_source],
             command=nl_join(
                 "Please write a pytest-compatible test suite that compliments the test(s) provided by the user.",
                 "Please note that you should *not* actually implement the system under test - that will be handled",
@@ -47,3 +51,11 @@ class TestAgent(CodeAgent):
                 "Just write the tests for the system.",
             ),
         ).render()
+
+    async def initial_generation(self) -> Message:
+        response = await super().initial_generation()
+        self.tests = parsing.extract_tests(response.content)
+        self.imports = parsing.extract_and_filter_imports(response.content)
+        tests_compiled = parsing.compile_tests(tests=self.tests, imports=self.imports)
+        response.content = tests_compiled
+        return response

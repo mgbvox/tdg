@@ -12,6 +12,3 @@ class Settings(BaseModel):
     def from_dotenv(cls):
         load_dotenv()
         return cls.model_validate(os.environ)
-
-
-print(Settings.from_dotenv())

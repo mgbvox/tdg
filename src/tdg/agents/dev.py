@@ -1,16 +1,13 @@
-from tdg.agents import TestAgent, templates
-from tdg.agents.base import CodeAgent
-from tdg.agents.templates import nl_join
+from tdg.agents import templates
+from tdg.agents.base import CodeAgent, CodeContext, Message
+from tdg.parsing import nl_join
 
 
 class DevAgent(CodeAgent):
-    def __init__(self, test_agent: TestAgent):
+    def __init__(self, test_response: Message, code_context: CodeContext) -> None:
         super().__init__()
-        self.test_agent = test_agent
-        self.context = test_agent.context
-        self.test_suite = nl_join("```python", self.test_agent.gen_response, "```")
-
-        self.gen_response = ""
+        self.code_context = code_context
+        self.test_suite = nl_join("```python", test_response.content, "```")
 
     def system_prompt(self) -> str:
         return templates.SystemTemplate(
@@ -29,12 +26,12 @@ class DevAgent(CodeAgent):
 
     def user_prompt(self) -> str:
         return templates.GenerationPrompt(
-            targets=self.context.signatures,
-            additional_objects=self.context.undefined,
+            targets=self.code_context.signatures,
+            additional_objects=self.code_context.undefined,
             tests=[self.test_suite],
             command=nl_join(
                 "Please implement the following functions to pass the provided tests:",
-                *self.context.fn_names,
+                *self.code_context.fn_names,
                 "",
                 "Please also implement any necessary undefined code objects.",
                 "NOTE: The code you generate will be placed above the test suite provided by the Test Designer agent;",

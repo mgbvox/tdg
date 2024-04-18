@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from tdg import context_managers as cm
 from tdg.config import Settings
-from tdg.extractors.code2str import strip_decorator
+from tdg.extract import strip_decorator
 from tdg.parsing import is_valid_python, clean_openai_code
 
 _conf = Settings.from_dotenv()
