@@ -1,12 +1,12 @@
 import uuid
 from pathlib import Path
-from typing import Callable, Any, Optional
+from typing import Callable, Any, Optional, Type
 
 import aiofiles
 
 from tdg import parsing
 from tdg.agents import NavAgent, TestAgent, DevAgent
-from tdg.agents.base import CodeContext
+from tdg.agents.base import CodeContext, Agent
 from tdg.parsing import nl_join
 from tdg.executors.test import TestExecutor
 
@@ -30,14 +30,27 @@ class Pipeline:
         self.nav: Optional[NavAgent] = None
         self.test: Optional[TestAgent] = None
         self.dev: Optional[DevAgent] = None
+        self.tester: Optional[TestExecutor] = None
 
-    async def gen(self) -> Optional[str]:
-        self.nav = NavAgent(self.code_context)
+    async def create_agent(self, cls: Type[Agent], **kwargs) -> Agent:
+        agent = cls(**kwargs)
+        agent.pipeline_id = self._id
+        await agent.load_state()
+        return agent
+
+    async def gen(self, no_test: bool = False) -> Optional[str]:
+        self.nav = await self.create_agent(NavAgent, code_context=self.code_context)
         nav_response = await self.nav.initial_generation()
-        self.test = TestAgent(nav_response=nav_response, code_context=self.code_context)
+        self.test = await self.create_agent(
+            TestAgent, nav_response=nav_response, code_context=self.code_context
+        )
         test_response = await self.test.initial_generation()
-        self.dev = DevAgent(test_response=test_response, code_context=self.code_context)
+        self.dev = await self.create_agent(
+            DevAgent, test_response=test_response, code_context=self.code_context
+        )
         dev_response = await self.dev.initial_generation()
+        if no_test:
+            return
 
         return await self.test_until_passing(
             solution=dev_response.content,
@@ -63,15 +76,15 @@ class Pipeline:
         async with aiofiles.open(script_log_file, "w") as f:
             await f.write(script)
 
-        tester = TestExecutor(script=script, path=script_log_file)
-        if tester.test().passed():
+        self.tester = TestExecutor(script=script, path=script_log_file)
+        if self.tester.test().passed():
             return solution
         else:
             # tests failed
             sep = "-----"
             fail_message = nl_join(
                 "Your implementation failed the test suite with the following errors:",
-                *[nl_join(fail.longrepr, sep) for fail in tester.tracker.failures],
+                *[nl_join(fail.longrepr, sep) for fail in self.tester.tracker.failures],
                 sep,
                 "Please fix your implementation.",
             )

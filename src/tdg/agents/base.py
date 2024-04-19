@@ -84,6 +84,11 @@ class GenerationHistory(BaseModel):
     def messages_dict(self) -> list[dict[str, str]]:
         return [item.dict() for item in self.messages]
 
+    def alter_initial(self, content: str):
+        self.initial_response.content = content
+        self.messages[2] = self.initial_response
+        self.messages = self.messages[:3]
+
 
 class Agent(abc.ABC):
     """Agent interface for multiagent generation."""
@@ -98,8 +103,6 @@ class Agent(abc.ABC):
         self.pipeline_id = pipeline_id
 
         self.history = GenerationHistory(messages=[])
-
-        self.load_state()
 
     @abc.abstractmethod
     def system_prompt(self) -> str:
@@ -184,6 +187,7 @@ class Agent(abc.ABC):
         return result
 
     async def continue_generation(self, message: str) -> Message:
+        self.history.latest_response = None
         self.history.messages.append(
             Message(
                 role="user",
@@ -211,17 +215,6 @@ class CodeAgent(Agent):
             system_prompt=self.system_prompt(),
             user_prompt=self.user_prompt(),
         )
-        content = choice.content
-        clean = parsing.clean_openai_code(content)
-        parsed, ast_or_error = parsing.is_valid_python(clean)
-        if parsed:
-            choice.content = clean
-            return choice
 
-        else:
-            raise SyntaxError(
-                nl_join(
-                    "Invalid python code generated!",
-                    content,
-                )
-            ) from ast_or_error
+        choice.content = parsing.clean_openai_code_or_error(choice.content)
+        return choice

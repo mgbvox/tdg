@@ -244,5 +244,20 @@ def clean_openai_code(code: str) -> str:
     return "\n".join(code_split)
 
 
+def clean_openai_code_or_error(code: str) -> str:
+    clean = clean_openai_code(code)
+    parsed, ast_or_error = is_valid_python(clean)
+    if parsed:
+        return clean
+
+    else:
+        raise SyntaxError(
+            nl_join(
+                "Invalid python code generated!",
+                code,
+            )
+        ) from ast_or_error
+
+
 def nl_join(*args: str) -> str:
     return "\n".join(args)
