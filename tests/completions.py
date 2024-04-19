@@ -1,4 +1,4 @@
-NAV_PRE_COMPLETION = """To solve the problem of generating a code implementation for the `factorial` function that passes the provided unit tests, the user will need to ensure the following:
+NAV_COMPLETION = """To solve the problem of generating a code implementation for the `factorial` function that passes the provided unit tests, the user will need to ensure the following:
 
 1. **Correctness**: The implementation must correctly compute the factorial of a given number `n`, where `n!` is defined as the product of all positive integers less than or equal to `n`. For `n = 0`, the factorial is defined as `1`.
 

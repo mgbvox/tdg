@@ -220,10 +220,10 @@ class Agent(abc.ABC):
     def response_key(self):
         return self.__class__.__name__.lower().replace("agent", "") + "_response"
 
-    async def generate(self, message: str) -> Message:
+    async def generate(self, message: Optional[str] = None) -> Message:
         """Continue generation with openai."""
 
-        result = await self._communicate_with_openai(message)
+        result = await self._communicate_with_openai(message or self.user_prompt())
 
         return result
 

@@ -6,8 +6,10 @@ import pytest
 
 from tdg import parsing
 from tdg.agents import NavAgent, TestAgent
+from tdg.agents.base import CodeContext, Message
 from tdg.agents.dev import DevAgent
 from tdg.executors.test import TestExecutor
+from tdg.extract import TestFinder
 from tdg.parsing import is_valid_python, nl_join
 from tdg.pipeline import Pipeline
 from tests import completions
@@ -42,103 +44,96 @@ def factorial_test():
 
 
 async def test_nav_agent_response():
-    nav_agent = NavAgent(factorial_test)
+    nav_agent = NavAgent(CodeContext(factorial_test))
 
-    mockCompletion = mock.MagicMock()
-    mockCompletion.choices[0].message.content = completions.NAV_PRE_COMPLETION
+    mockResponse = Message.assistant(completions.NAV_COMPLETION)
 
-    with patch("tdg.agents.nav.NavAgent._do_generation", return_value=mockCompletion):
-        response = await nav_agent.initial_generation()
+    with patch(
+        "tdg.agents.nav.NavAgent._communicate_with_openai", return_value=mockResponse
+    ):
+        response = await nav_agent.generate()
 
-    assert response.nav_response is not None
-    assert response.nav_response != ""
-    print(response.nav_response)
-
-
-async def test_nav_agent_response_if_already_generated():
-    nav_agent = NavAgent(factorial_test)
-    nav_agent.context.nav_response = "tacos"
-    assert (await nav_agent.initial_generation()).nav_response == "tacos"
+    assert response == mockResponse
 
 
 @pytest.fixture
 async def nav_pre() -> NavAgent:
-    nav_agent = NavAgent(factorial_test)
+    nav_agent = NavAgent(CodeContext(factorial_test))
 
-    mockCompletion = mock.MagicMock()
-    mockCompletion.choices[0].message.content = completions.NAV_PRE_COMPLETION
+    mockResponse = Message.assistant(completions.NAV_COMPLETION)
 
-    with patch("tdg.agents.nav.NavAgent._do_generation", return_value=mockCompletion):
+    with patch(
+        "tdg.agents.nav.NavAgent._communicate_with_openai", return_value=mockResponse
+    ):
         yield nav_agent
 
 
 async def test_test_agent(nav_pre):
 
-    mockCompletion = mock.MagicMock()
-    mockCompletion.choices[0].message.content = completions.TEST_DESIGNER_COMPLETION
+    mockResponse = Message.assistant(completions.TEST_DESIGNER_COMPLETION)
 
-    test_agent = TestAgent(await nav_pre.initial_generation())
+    test_agent = TestAgent(await nav_pre.generate(), code_context=nav_pre.code_context)
 
-    with patch("tdg.agents.test.TestAgent._do_generation", return_value=mockCompletion):
-        response = await test_agent.initial_generation()
+    with patch(
+        "tdg.agents.test.TestAgent._communicate_with_openai", return_value=mockResponse
+    ):
+        response = await test_agent.generate()
     assert response
-    parsed, ast_or_error = is_valid_python(response)
+    parsed, ast_or_error = is_valid_python(response.content)
     assert parsed
     assert isinstance(ast_or_error, ast.AST)
-    print(response)
 
 
 @pytest.fixture
 async def tdd_agent(nav_pre):
-    _ = await nav_pre.initial_generation()
+    mockResponse = Message.assistant(completions.TEST_DESIGNER_COMPLETION)
+    test_agent = TestAgent(await nav_pre.generate(), code_context=nav_pre.code_context)
 
-    test_agent = TestAgent(nav_pre=nav_pre)
-
-    mockCompletion = mock.MagicMock()
-    mockCompletion.choices[0].message.content = completions.TEST_DESIGNER_COMPLETION
-
-    with patch("tdg.agents.test.TestAgent._do_generation", return_value=mockCompletion):
+    with patch(
+        "tdg.agents.test.TestAgent._communicate_with_openai", return_value=mockResponse
+    ):
         yield test_agent
 
 
 async def test_dev_agent(tdd_agent):
-    _ = await tdd_agent.initial_generation()
 
-    dev_agent = DevAgent(test_agent=tdd_agent)
+    dev_agent = DevAgent(
+        await tdd_agent.generate(), code_context=tdd_agent.code_context
+    )
 
-    mockCompletion = mock.MagicMock()
-    mockCompletion.choices[0].message.content = completions.DEVELOPER_COMPLETION
-    with patch("tdg.agents.dev.DevAgent._do_generation", return_value=mockCompletion):
-        response = await dev_agent.initial_generation()
+    mockResponse = Message.assistant(completions.DEVELOPER_COMPLETION)
+
+    with patch(
+        "tdg.agents.dev.DevAgent._communicate_with_openai", return_value=mockResponse
+    ):
+        response = await dev_agent.generate()
 
     assert response
-    parsed, ast_or_error = is_valid_python(response)
+    parsed, ast_or_error = is_valid_python(response.content)
     assert parsed
     assert isinstance(ast_or_error, ast.AST)
-    print(response)
 
 
 @pytest.fixture
 async def dev_agent(tdd_agent):
 
-    dev_agent = DevAgent(await tdd_agent.initial_generation())
+    dev_agent = DevAgent(
+        await tdd_agent.generate(), code_context=tdd_agent.code_context
+    )
 
-    mockCompletion = mock.MagicMock()
-    mockCompletion.choices[0].message.content = completions.DEVELOPER_COMPLETION
-    with patch("tdg.agents.dev.DevAgent._do_generation", return_value=mockCompletion):
+    mockResponse = Message.assistant(completions.DEVELOPER_COMPLETION)
+
+    with patch(
+        "tdg.agents.dev.DevAgent._communicate_with_openai", return_value=mockResponse
+    ):
         yield dev_agent
 
 
 async def test_test_execution(tdd_agent, dev_agent):
-    _ = await dev_agent.initial_generation()
-
-    ex = TestExecutor(
-        script=parsing.format_code(
-            nl_join(
-                dev_agent.gen_response,
-                tdd_agent.gen_response,
-            )
-        ),
-    )
+    solution = (await dev_agent.generate()).content
+    tests = TestFinder().visit_code((await tdd_agent.generate()).content).tests.values()
+    tests = list(tests)
+    script = parsing.compile_tests(tests=tests, implementations=[solution], imports=[])
+    ex = TestExecutor(script=script)
     ex.test()
     assert ex.passed()
