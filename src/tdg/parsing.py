@@ -83,12 +83,14 @@ def extract_imports(code: str, **kwargs: Unpack[FinderConfig]) -> list[str]:
     )
 
 
-def extract_and_filter_imports(code: str) -> list[str]:
-    return filter_imports(*extract_imports(code))
+def extract_and_filter_imports(
+    code: str, invert: bool = False
+) -> tuple[list[str], list[str]]:
+    return filter_imports(*extract_imports(code), invert=invert)
 
 
 @functools.lru_cache(None)
-def filter_imports(*imports: str, invert: bool = False) -> list[str]:
+def filter_imports(*imports: str, invert: bool = False) -> tuple[list[str], list[str]]:
     """Given a list of import statements, return only the statements that import from
     modules in the current interpreter path.
 
@@ -97,8 +99,7 @@ def filter_imports(*imports: str, invert: bool = False) -> list[str]:
     invert: If true, return only the statements that are invalid as imports.
 
     Returns:
-    list[str]: A list of import statements that refer to modules available in the
-               current Python interpreter's environment.
+    list[str], list[str]: Two lists. First is valid imports, second is invalid imports.
     """
     filtered_imports = set()
     invalid_imports = set()
@@ -150,15 +151,13 @@ def filter_imports(*imports: str, invert: bool = False) -> list[str]:
                     # import not available in current namespace; is invalid
                     invalid_imports.add(import_statement)
 
-    if invert:
-        return sorted(list(invalid_imports))
-    return sorted(list(filtered_imports))
+    return sorted(list(filtered_imports)), sorted(list(invalid_imports))
 
 
 def extract_tests(
     code: Union[str, Path],
 ) -> list[str]:
-    return TestFinder().visit_code(code).tests
+    return list(TestFinder().visit_code(code).tests.values())
 
 
 gen_pattern = re.compile(
@@ -235,20 +234,32 @@ def find_gen_signatures(doc: str) -> dict[str, str]:
     return {}
 
 
-def clean_openai_code(code: str) -> str:
-    code_split = code.strip().splitlines()
-    if "```py" in code_split[0]:
-        code_split = code_split[1:]
-    if "```" in code_split[-1]:
-        code_split = code_split[:-1]
-    return "\n".join(code_split)
+python_pattern = re.compile(r"```python(.*?)```", re.DOTALL + re.MULTILINE)
 
 
 def clean_openai_code_or_error(code: str) -> str:
-    clean = clean_openai_code(code)
-    parsed, ast_or_error = is_valid_python(clean)
+    """
+    Extract all code (delimited by ```python```) from an openai generation string.
+
+    If multiple code blocks are provided, they will be sequentially joined.
+
+    Output is passed through the black formatter and parsed to ensure functionality.
+
+    Args:
+        code: The raw input string to parse.
+
+    Returns:
+
+    """
+    if matches := python_pattern.findall(code):
+        extracted = nl_join(*matches)
+    else:
+        # assume the input is already valid python code
+        extracted = code
+
+    parsed, ast_or_error = is_valid_python(extracted)
     if parsed:
-        return clean
+        return format_code(extracted)
 
     else:
         raise SyntaxError(

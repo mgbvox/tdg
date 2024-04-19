@@ -47,9 +47,7 @@ async def test_nav_agent_response():
     mockCompletion = mock.MagicMock()
     mockCompletion.choices[0].message.content = completions.NAV_PRE_COMPLETION
 
-    with patch(
-        "tdg.agents.nav.NavAgentPre._do_generation", return_value=mockCompletion
-    ):
+    with patch("tdg.agents.nav.NavAgent._do_generation", return_value=mockCompletion):
         response = await nav_agent.initial_generation()
 
     assert response.nav_response is not None
@@ -70,9 +68,7 @@ async def nav_pre() -> NavAgent:
     mockCompletion = mock.MagicMock()
     mockCompletion.choices[0].message.content = completions.NAV_PRE_COMPLETION
 
-    with patch(
-        "tdg.agents.nav.NavAgentPre._do_generation", return_value=mockCompletion
-    ):
+    with patch("tdg.agents.nav.NavAgent._do_generation", return_value=mockCompletion):
         yield nav_agent
 
 

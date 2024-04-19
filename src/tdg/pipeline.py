@@ -39,16 +39,20 @@ class Pipeline:
         return agent
 
     async def gen(self, no_test: bool = False) -> Optional[str]:
+        print(f"Starting pipeline for context {self.code_context.signatures}")
         self.nav = await self.create_agent(NavAgent, code_context=self.code_context)
-        nav_response = await self.nav.initial_generation()
+        nav_response = await self.nav.generate(self.nav.user_prompt())
+
         self.test = await self.create_agent(
             TestAgent, nav_response=nav_response, code_context=self.code_context
         )
-        test_response = await self.test.initial_generation()
+        test_response = await self.test.generate(self.test.user_prompt())
+
         self.dev = await self.create_agent(
             DevAgent, test_response=test_response, code_context=self.code_context
         )
-        dev_response = await self.dev.initial_generation()
+        dev_response = await self.dev.generate(self.dev.user_prompt())
+
         if no_test:
             return
 
@@ -58,6 +62,7 @@ class Pipeline:
         )
 
     async def test_until_passing(self, *, solution: str, depth: int) -> Optional[str]:
+        print(f"TEST ITER: {depth + 1}")
         if depth > self.max_iter:
             raise GenerationError(
                 f"Max iterations reached without a passing test suite: {self.max_iter}"
@@ -89,7 +94,7 @@ class Pipeline:
                 "Please fix your implementation.",
             )
 
-            refined = await self.dev.continue_generation(fail_message)
+            refined = await self.dev.generate(fail_message)
             return await self.test_until_passing(
                 solution=refined.content, depth=depth + 1
             )

@@ -9,12 +9,16 @@ from typing import Optional, Literal, Callable, Any
 import aiofiles
 import openai
 from openai.types.chat import ChatCompletion
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from tdg import parsing
 from tdg.config import Settings
 from tdg.extract import UndefinedFinder
 from tdg.parsing import find_gen_signatures, nl_join
+
+MAX_ITER_PER_AGENT = 5
+MAX_HISTORY_PER_AGENT: int = 3 + (2 * MAX_ITER_PER_AGENT)
+"""Limit the number of generations a given agent can do."""
 
 
 class CodeContext:
@@ -70,24 +74,36 @@ class Message(BaseModel):
     role: str
     content: str
 
+    @classmethod
+    def user(cls, content: str):
+        return cls(role="user", content=content)
+
+    @classmethod
+    def system(cls, content: str):
+        return cls(role="system", content=content)
+
+    @classmethod
+    def assistant(cls, content: str):
+        return cls(role="assistant", content=content)
+
 
 class GenerationHistory(BaseModel):
+    memory: dict[str, Message] = Field(default_factory=dict)
+    """Mapping of user messages to remembered system messages"""
+
     messages: list[Message]
     """The entire message chain"""
-
-    initial_response: Optional[Message] = None
-    """The initial LLM response (result of agent.initial_generation)"""
-
-    latest_response: Optional[Message] = None
-    """The latest LLM response (result of agent.continue_generation)"""
 
     def messages_dict(self) -> list[dict[str, str]]:
         return [item.dict() for item in self.messages]
 
     def alter_initial(self, content: str):
-        self.initial_response.content = content
-        self.messages[2] = self.initial_response
+        self.messages[2].content = content
         self.messages = self.messages[:3]
+
+
+class MaxIterExceeded(BaseException):
+    pass
 
 
 class Agent(abc.ABC):
@@ -102,7 +118,13 @@ class Agent(abc.ABC):
         self.config = config or AgentConfig()
         self.pipeline_id = pipeline_id
 
-        self.history = GenerationHistory(messages=[])
+        self.history = GenerationHistory.model_validate(
+            {
+                "messages": [
+                    {"role": "system", "content": self.system_prompt()},
+                ]
+            }
+        )
 
     @abc.abstractmethod
     def system_prompt(self) -> str:
@@ -132,69 +154,58 @@ class Agent(abc.ABC):
                 content = json.loads(content)
                 self.history = GenerationHistory.model_validate(content)
 
-    async def _communicate_with_openai(
-        self, phase: Literal["initial", "latest"]
-    ) -> Message:
-        if response := getattr(self.history, f"{phase}_response"):
-            return response
-        else:
+    async def _communicate_with_openai(self, message: str) -> Message:
+        # error if too many iterations
+        if len(self.history.messages) > MAX_HISTORY_PER_AGENT:
+            raise MaxIterExceeded(
+                f"Agent {self.__class__.__name__} has exceeded its generation length of {MAX_HISTORY_PER_AGENT}"
+            )
+
+        # return from memory if exists!
+        response = self.history.memory.get(message)
+        if not response:
+            # else, generate
+
+            # create user a message object
+            user_message = Message.user(message)
+            # store it
+            self.history.messages.append(user_message)
+
+            # send the updated message history (user message last!) to LLM
             result: ChatCompletion = await self.client.chat.completions.create(
                 messages=self.history.messages_dict(),
                 **self.config.non_null(),
             )
+
+            # for now, just pick the first option
+            # TODO: search over multiple options
             choice = result.choices[0]
-            message = Message(role=choice.message.role, content=choice.message.content)
-            self.history.messages.append(message)
-            setattr(self.history, f"{phase}_response", message)
+            response = Message(role=choice.message.role, content=choice.message.content)
+
+            # add LLM response to message history
+            self.history.messages.append(response)
+
+            # remember user -> llm response chain
+            self.history.memory[message] = response
+            print(response.content)
+
             await self.save_state()
 
-        return message
+        return await self.ensure_output_valid(response)
 
-    async def _do_initial_generation(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-    ) -> Message:
-        """Do the initial Agent generation.
-
-        Will RESET self.message_history if any exists. For subsequent communication with the same system,
-        please use self.continue_generation().
-        """
-
-        if not self.history.messages:
-            self.history = GenerationHistory.model_validate(
-                {
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ]
-                }
-            )
-
-        result = await self._communicate_with_openai(phase="initial")
-
-        return result
+    @abc.abstractmethod
+    async def ensure_output_valid(self, message: Message):
+        """Validate the message, returning if good, recursing back to generate again if not."""
+        raise NotImplementedError()
 
     @property
     def response_key(self):
         return self.__class__.__name__.lower().replace("agent", "") + "_response"
 
-    async def initial_generation(self) -> Message:
-        result = await self._do_initial_generation(
-            system_prompt=self.system_prompt(),
-            user_prompt=self.user_prompt(),
-        )
-        return result
+    async def generate(self, message: str) -> Message:
+        """Continue generation with openai."""
 
-    async def continue_generation(self, message: str) -> Message:
-        self.history.latest_response = None
-        self.history.messages.append(
-            Message(
-                role="user",
-                content=message,
-            )
-        )
-        result = await self._communicate_with_openai(phase="latest")
+        result = await self._communicate_with_openai(message)
 
         return result
 
@@ -204,17 +215,33 @@ class CodeAgent(Agent):
     An Agent Subclass that generates code.
     """
 
-    async def initial_generation(self) -> Message:
-        """
-        Generate a response and ensure it is valid python code.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        Returns:
-            Valid python code.
-        """
-        choice = await self._do_initial_generation(
-            system_prompt=self.system_prompt(),
-            user_prompt=self.user_prompt(),
-        )
+        self.imports: list[str] = []
 
-        choice.content = parsing.clean_openai_code_or_error(choice.content)
+    async def ensure_output_valid(self, message: Message):
+        return await self.ensure_valid_code(message)
+
+    async def ensure_valid_code(self, choice: Message) -> Message:
+        try:
+            choice.content = parsing.clean_openai_code_or_error(choice.content)
+        except SyntaxError:
+            return await self.generate(
+                "Your generation contained invalid python syntax. Please try again.",
+            )
+
+        good_imports, bad_imports = parsing.extract_and_filter_imports(choice.content)
+        if bad_imports:
+            return await self.generate(
+                nl_join(
+                    "Your generation imported libraries or modules that are not",
+                    "available on our system:",
+                    nl_join(*bad_imports),
+                    "Please alter or remove the affected code.",
+                )
+            )
+
+        self.imports = good_imports
+
         return choice

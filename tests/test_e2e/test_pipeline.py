@@ -1,11 +1,17 @@
 import inspect
 import textwrap
+from pathlib import Path
 from typing import Callable
+from unittest import mock
+from unittest.mock import patch
 
 import pytest
 
 from tdg import parsing
+from tdg.agents import TestAgent
+from tdg.agents.base import CodeContext, Message
 from tdg.pipeline import Pipeline
+from tests import completions
 
 
 def something_test():
@@ -56,7 +62,9 @@ def factorial_test_w_pass_in(factorial: Callable[[int], int]):
 
 @pytest.mark.asyncio
 async def test_full_pipeline():
-    pipeline = Pipeline(factorial_test, from_id="a2afd9d3-0c60-4b13-b6d7-84efaf49d4dc")
+    pipeline = Pipeline(
+        factorial_test
+    )  # , from_id="a2afd9d3-0c60-4b13-b6d7-84efaf49d4dc")
     out = await pipeline.gen()
     assert out
     compiled_code = compile(out, "<string>", "exec")
@@ -76,12 +84,6 @@ async def test_full_pipeline_with_failing_initial_impl():
 
     bad_implementation = textwrap.dedent(inspect.getsource(factorial))
     pipeline.dev.history.alter_initial(bad_implementation)
-    assert (
-        pipeline.dev.history.initial_response.content
-        in pipeline.dev.history.messages[2].content
-    )
-    assert pipeline.dev.history.initial_response.content == bad_implementation
-    assert pipeline.dev.history.initial_response.role == "assistant"
     assert len(pipeline.dev.history.messages) == 3
 
     fixed = await pipeline.test_until_passing(solution=bad_implementation, depth=0)
@@ -92,3 +94,42 @@ async def test_full_pipeline_with_failing_initial_impl():
     exec(compiled_code, local_namespace)
     factorial_fixed = local_namespace["factorial"]
     factorial_test_w_pass_in(factorial_fixed)
+
+
+def fib_test():
+    """"""
+    assert fib(1) == 1
+    assert fib(2) == 1
+    assert fib(3) == 2
+    assert fib(4) == 3
+
+
+def load_data(name: str) -> str:
+    return (Path(__file__).parent / "data" / f"{name}.py").read_text()
+
+
+@pytest.mark.asyncio
+async def test_regenerates_tests_if_bad_imports():
+    test = TestAgent(
+        nav_response=Message.assistant(""), code_context=CodeContext(fib_test)
+    )
+
+    with patch(
+        "tdg.agents.test.TestAgent._communicate_with_openai",
+        new=mock.AsyncMock(
+            side_effect=[
+                Message.assistant(load_data("bad_imports_test")),
+                Message.assistant(load_data("imports_fine_bad_fixture")),
+                Message.assistant(load_data("good_test")),
+            ],
+        ),
+    ):
+        assert (await test.initial_generation()).content
+
+
+def test_regenerated_impl_if_bad_imports():
+    pass
+
+
+def test_raises_MaxIter_error_if_too_many_continuations():
+    pass

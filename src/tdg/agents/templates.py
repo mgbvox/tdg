@@ -19,8 +19,6 @@ Please also note that you are running in a performance-critical environment; you
     * short
     * concise
     * to the point
-    * high level
-    * optimally useful
 """
 
 AVOID_PITFALLS = """
@@ -37,6 +35,12 @@ be in the form of # python comments or docstrings.
 
 If you need to import a library, you should only import packages that are already installed on this system; those are:
 {list_installed_packages()}
+
+Do NOT use any libraries not listed above, even if doing so would lead to a more-optimal solution.
+If you do, your response will be rejected.
+
+If you are generating a test suite, please ensure your tests are formatted for pytest,
+and do NOT use any fixtures, since we cannot guarantee their availability on our system.
 """
 
 

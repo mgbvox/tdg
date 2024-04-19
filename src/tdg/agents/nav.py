@@ -1,12 +1,12 @@
 from tdg.agents import templates
-from tdg.agents.base import Agent, CodeContext
+from tdg.agents.base import Agent, CodeContext, Message
 from tdg.parsing import nl_join
 
 
 class NavAgent(Agent):
     def __init__(self, code_context: CodeContext):
-        super().__init__()
         self.code_context = code_context
+        super().__init__()
 
     def system_prompt(self) -> str:
         return templates.SystemTemplate(
@@ -36,3 +36,6 @@ class NavAgent(Agent):
                 "Think in particular about any gotchas and edge cases that might be encountered.",
             ),
         ).render()
+
+    async def ensure_output_valid(self, message: Message):
+        return message

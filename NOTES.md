@@ -2,15 +2,13 @@
 
 
 ## TODO
-* Map canonical solution/test examples into pytest module
-* Implement pytest executor module
-* Include example base tests with code generation prompt
-* Navigator can perform RAG for algorithm look up, search, etc.
-* Perhaps navigator also tackles pseudocode generation? AB test this.
 * diagram, diagram, diagram
+* CodeAgent: reject if invalid imports
 
 
 ## Later / Ideas
+Navigator can perform RAG for algorithm look up, search, etc.
+
 Let each generator role know about the other roles, and allow e.g role A to
 query role B, C, etc.
 

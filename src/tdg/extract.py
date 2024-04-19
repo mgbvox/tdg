@@ -2,7 +2,7 @@ import _ast
 import ast
 import inspect
 import textwrap
-from typing import Callable, Optional, Union, Type, TypedDict, Unpack
+from typing import Callable, Optional, Union, Type, TypedDict, Unpack, Any
 
 
 def strip_decorator(func: Callable) -> str:
@@ -56,6 +56,37 @@ def get_node_source(code: str, node: ast.AST) -> str:
         node_source[-1] = node_source[-1][: node.end_col_offset]
 
     return "\n".join(node_source)
+
+
+def extract_function_args(
+    node: Union[ast.FunctionDef, ast.AsyncFunctionDef],
+) -> tuple[list[str], dict[str, Any]]:
+    # Ensure the node is either FunctionDef or AsyncFunctionDef
+    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        raise ValueError("Node must be a FunctionDef or AsyncFunctionDef")
+
+    pos_args = []  # List to hold positional arguments
+    kw_args = {}  # Dictionary to hold keyword arguments with defaults
+
+    # Number of arguments without default values
+    num_pos_args = len(node.args.args) - len(node.args.defaults)
+
+    # Collect positional arguments without defaults
+    for arg in node.args.args[:num_pos_args]:
+        pos_args.append(arg.arg)
+
+    # Collect keyword arguments with defaults
+    for arg, default in zip(node.args.args[num_pos_args:], node.args.defaults):
+        if isinstance(
+            default, ast.Constant
+        ):  # Simple constants (e.g., None, int, float, str)
+            kw_args[arg.arg] = default.value
+        else:
+            # For more complex expressions, you might want to use ast.dump(default)
+            # to serialize them or perform additional handling to convert them to Python values
+            kw_args[arg.arg] = ast.dump(default)
+
+    return pos_args, kw_args
 
 
 class GenericVisitor(ast.NodeVisitor):
@@ -136,12 +167,20 @@ class NodeSourceFinder(GenericVisitor):
 
 class TestFinder(GenericVisitor):
     def __init__(self, test_prefix: str = "test_"):
-        self.tests: list[str] = []
+        self.tests: dict[str, str] = {}
+        self.test_args: dict[str, list[str]] = {}
+        self.test_kwargs: dict[str, dict[str, Any]] = {}
         self._test_prefix = test_prefix
         super().__init__(self.log_tests)
 
     def log_tests(self, node: ast.AST):
         match node:
             case ast.FunctionDef() | ast.AsyncFunctionDef():
-                if node.name.startswith(self._test_prefix):
-                    self.tests.append(ast.get_source_segment(self.source, node))
+                if (name := node.name).startswith(self._test_prefix):
+                    args, kwargs = extract_function_args(node)
+                    if args:
+                        self.test_args[name] = args
+                    if kwargs:
+                        self.test_kwargs[name] = kwargs
+
+                    self.tests[name] = ast.get_source_segment(self.source, node)
