@@ -4,7 +4,7 @@ import inspect
 import json
 import textwrap
 from pathlib import Path
-from typing import Optional, Literal, Callable, Any
+from typing import Optional, Literal, Callable, Any, Union
 
 import aiofiles
 import openai
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from tdg import parsing
 from tdg.config import Settings
 from tdg.extract import UndefinedFinder
+from tdg.parse_humaneval import HEPSuite
 from tdg.parsing import find_gen_signatures, nl_join
 
 MAX_ITER_PER_AGENT = 5
@@ -22,36 +23,53 @@ MAX_HISTORY_PER_AGENT: int = 3 + (2 * MAX_ITER_PER_AGENT)
 
 
 class CodeContext:
-    def __init__(self, test: Callable[[Any], Any]):
-        test_module = importlib.import_module(test.__module__)
-        test_globals = vars(test_module)
-        prior_frame = inspect.currentframe().f_back
-        test_locals = prior_frame.f_locals
+    def __init__(self, test: Union[HEPSuite, Callable[[Any], Any]]):
+        """
 
-        self.test_fn = test
-        self.test_source = inspect.getsource(test)
-        self.test_source = self.test_source.replace(test.__doc__, "")
+        Two input cases:
+            HEPItem(): Prompt is coming from our benchmark, derived from HumanEval. Does NOT conform to our specs.
+            callable(): We've passed in a test object, meaning it's coming from our Generator pipeline.
 
-        undefined = (
-            UndefinedFinder(test_globals, test_locals).visit_code(test).undefined
-        )
-        signatures = find_gen_signatures(test.__doc__)
 
-        self.fn_names = list(signatures.keys())
-        self.signatures = []
-        self.undefined = []
+        """
+        match test:
+            case HEPSuite():
+                # incoming from human eval
+                self.test_sources = test.tests
+                self.fn_names = [test.fn_name]
+                self.signatures = [test.prompt]
+                self.undefined = []
 
-        for idx, undefined in enumerate(undefined):
-            if sig := signatures.get(undefined):
-                self.signatures.append(
-                    nl_join(
-                        f"{idx}. Signature for function '{undefined}':",
-                        textwrap.indent(sig, "\t"),
-                        "----------",
-                    )
+            case _:
+                test_module = importlib.import_module(test.__module__)
+                test_globals = vars(test_module)
+                prior_frame = inspect.currentframe().f_back
+                test_locals = prior_frame.f_locals
+
+                self.test_sources = [inspect.getsource(test).replace(test.__doc__, "")]
+
+                undefined = (
+                    UndefinedFinder(test_globals, test_locals)
+                    .visit_code(test)
+                    .undefined
                 )
-            else:
-                self.undefined.append(undefined)
+                signatures = find_gen_signatures(test.__doc__)
+
+                self.fn_names = list(signatures.keys())
+                self.signatures = []
+                self.undefined = []
+
+                for idx, undefined in enumerate(undefined):
+                    if sig := signatures.get(undefined):
+                        self.signatures.append(
+                            nl_join(
+                                f"{idx}. Signature for function '{undefined}':",
+                                textwrap.indent(sig, "\t"),
+                                "----------",
+                            )
+                        )
+                    else:
+                        self.undefined.append(undefined)
 
 
 class AgentConfig(BaseModel):

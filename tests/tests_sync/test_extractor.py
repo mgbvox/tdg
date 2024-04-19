@@ -154,15 +154,17 @@ def test_filter_imports():
         ),
     ]
 
-    assert parsing.filter_imports(*(good + bad)) == sorted(good)
-    assert parsing.filter_imports(*(good + bad), invert=True) == sorted(bad)
+    found_good, found_bad = parsing.filter_imports(*(good + bad))
+
+    assert sorted(found_bad) == sorted(bad)
+    assert sorted(found_good) == sorted(good)
 
 
 def test_extract_test_source_filter_valid_imports():
     source = Path(__file__).parent / "extractor_data" / "demo_test_suite.txt"
     source = source.read_text()
 
-    imports = parsing.extract_and_filter_imports(source)
+    imports, _ = parsing.extract_and_filter_imports(source)
     tests = parsing.extract_tests(source)
     script = parsing.compile_tests(
         tests, imports=imports, implementations=[completions.DEVELOPER_COMPLETION]

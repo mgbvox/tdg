@@ -2,10 +2,12 @@ import random
 import re
 import textwrap
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Union, Self
 
 import datasets
 from pydantic import BaseModel
+
+from tdg import parsing
 
 
 class HEPItem(BaseModel):
@@ -14,6 +16,43 @@ class HEPItem(BaseModel):
     canonical_solution: str
     entry_point: str
     test: str
+
+
+class HEPSuite(BaseModel):
+    """A HumanEval Benchmark Pytest Suite with Context"""
+
+    fn_name: str
+    tests: list[str]
+    imports: list[str]
+    prompt: str
+    solution: str
+
+    def split(self, n: Optional[Union[int, float]] = 10) -> tuple[Self, Self]:
+        total_tests = len(self.tests)
+        match n:
+            case int():
+                # use the lower number
+                k = min(n, total_tests)
+            case float():
+                # max_test is a fraction
+                k = int(min(total_tests * n, total_tests))
+            case _:
+                # ignore any modifiers
+                k = total_tests
+
+        random.shuffle(self.tests)
+        train, test = self.tests[:k], self.tests[k:]
+        return self.model_copy(update={"tests": train}), self.model_copy(
+            update={"tests": test}
+        )
+
+    def compile(self, w_solution: bool = True) -> str:
+        """Compile a human eval problem into a runnable test suite."""
+        return parsing.compile_tests(
+            tests=self.tests,
+            implementations=[self.solution] if w_solution else [],
+            imports=self.imports,
+        )
 
 
 @lru_cache(None)
@@ -28,16 +67,6 @@ def parse_hep() -> list[HEPItem]:
     return data
 
 
-def extract_prompt_name_and_doc(item: HEPItem) -> Optional[tuple[str, str]]:
-    fn_name = item.entry_point
-    doc_pat = re.compile(
-        f"def\s+{fn_name}" + r".*['\"]{3}(.*?)['\"]{3}", re.DOTALL + re.MULTILINE
-    )
-    if doc_match := re.search(doc_pat, item.prompt):
-        doc = doc_match.group(1)
-        return fn_name, doc
-
-
 input_pat = re.compile("inputs\s+=(.*?)\n")
 results_pat = re.compile("results\s+=(.*?)\n")
 
@@ -46,15 +75,19 @@ def quote_string(s: str) -> str:
     return f'"{s}"'
 
 
-def convert_tests(hep: HEPItem, max_tests: int = 10) -> Optional[tuple[str, list[str]]]:
+def convert_tests(
+    hep: HEPItem,
+) -> Optional[HEPSuite]:
     "for i, inp in enumerate(inputs):\n        assertion(candidate(*inp), ref_func(*inp), 0)"
 
-    soln = hep.prompt + hep.canonical_solution
-    # figure out if takes *args or explicit positionals
-    # definition = find_definition(code=soln, name=hep.entry_point)
-    # TODO: return node rather than str, look at node arg sig
-
-    blocks = [soln]
+    blocks = []
+    solution = hep.prompt + hep.canonical_solution
+    imports = parsing.extract_imports(
+        parsing.nl_join(
+            solution,
+            hep.test,
+        ),
+    )
 
     inp = None
     if input_match := input_pat.search(hep.test):
@@ -65,12 +98,10 @@ def convert_tests(hep: HEPItem, max_tests: int = 10) -> Optional[tuple[str, list
 
     match inp, out:
         case str(), str():
-            print("in and out")
             inp = eval(inp.strip())
             out = eval(out.strip())
-            cases = random.sample(list(zip(inp, out)), k=min(max_tests, len(inp)))
 
-            for case_num, case in enumerate(cases):
+            for case_num, case in enumerate(zip(inp, out)):
                 case_inp, case_out = case
                 if isinstance(case_inp, str):
                     case_inp = quote_string(case_inp)
@@ -86,14 +117,13 @@ def convert_tests(hep: HEPItem, max_tests: int = 10) -> Optional[tuple[str, list
                 )
                 blocks.append(test_block)
 
-        # case None, str():
-        #     print("out only")
-        # case str(), None:
-        #     print("in only")
-        # case None, None:
-        #     print("No in or out")
         case _:
-            # raise NotImplementedError("Should be unreachable")
             return None
 
-    return soln, blocks
+    return HEPSuite(
+        fn_name=hep.entry_point,
+        tests=blocks,
+        imports=imports,
+        prompt=hep.prompt,
+        solution=solution,
+    )

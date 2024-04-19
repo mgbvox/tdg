@@ -68,7 +68,7 @@ class Pipeline:
                 f"Max iterations reached without a passing test suite: {self.max_iter}"
             )
 
-        tests = self.test.tests + [self.code_context.test_source]
+        tests = self.test.tests + self.code_context.test_sources
         imports = self.test.imports
 
         script = parsing.compile_tests(

@@ -7,11 +7,9 @@ from unittest.mock import patch
 
 import pytest
 
-from tdg import parsing
 from tdg.agents import TestAgent
 from tdg.agents.base import CodeContext, Message
 from tdg.pipeline import Pipeline
-from tests import completions
 
 
 def something_test():

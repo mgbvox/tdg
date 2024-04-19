@@ -45,7 +45,7 @@ class TestAgent(CodeAgent):
         return templates.GenerationPrompt(
             targets=self.code_context.signatures,
             additional_objects=self.code_context.undefined,
-            tests=[self.code_context.test_source],
+            tests=self.code_context.test_sources,
             command=nl_join(
                 "Please write a pytest-compatible test suite that compliments the test(s) provided by the user.",
                 "Please note that you should *not* actually implement the system under test - that will be handled",

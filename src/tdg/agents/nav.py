@@ -30,7 +30,7 @@ class NavAgent(Agent):
         return templates.GenerationPrompt(
             targets=self.code_context.signatures,
             additional_objects=self.code_context.undefined,
-            tests=[self.code_context.test_source],
+            tests=self.code_context.test_sources,
             command=nl_join(
                 "Please reason in detail about what the user will need to do to solve the problem.",
                 "Think in particular about any gotchas and edge cases that might be encountered.",
