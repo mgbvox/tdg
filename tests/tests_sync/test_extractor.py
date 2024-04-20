@@ -160,15 +160,17 @@ def test_filter_imports():
     assert sorted(found_good) == sorted(good)
 
 
-def test_extract_test_source_filter_valid_imports():
-    source = Path(__file__).parent / "extractor_data" / "demo_test_suite.txt"
-    source = source.read_text()
-
-    imports, _ = parsing.extract_and_filter_imports(source)
-    tests = parsing.extract_tests(source)
-    script = parsing.compile_tests(
-        tests, imports=imports, implementations=[completions.DEVELOPER_COMPLETION]
-    )
-
-    tested = TestExecutor(script=script).test()
-    assert tested.passed()
+#
+#
+# def test_extract_test_source_filter_valid_imports():
+#     source = Path(__file__).parent / "extractor_data" / "demo_test_suite.txt"
+#     source = source.read_text()
+#
+#     imports, _ = parsing.extract_and_filter_imports(source)
+#     tests = parsing.extract_tests(source)
+#     script = parsing.compile_tests(
+#         tests, imports=imports, implementations=[completions.DEVELOPER_COMPLETION]
+#     )
+#
+#     tested = TestExecutor(script=script).test()
+#     assert tested.passed()

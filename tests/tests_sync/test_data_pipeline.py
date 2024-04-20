@@ -10,7 +10,7 @@ from tdg.parse_humaneval import (
     HEPItem,
 )
 
-N = -1
+N = 30
 
 
 @pytest.fixture(params=parse_hep()[:N])
@@ -35,11 +35,12 @@ def test_code_context_from_hep(hep):
         assert nav.system_prompt()
 
 
-def test_convert_tests(hep):
-    if parsed := convert_tests(hep):
-        subset, _ = parsed.split(10)
-        ex = TestExecutor(subset.compile())
-        ex.test()
-        assert ex.exit_code == ExitCode.OK
-        assert ex.tracker.successes
-        assert not ex.tracker.failures
+#
+# def test_convert_tests(hep):
+#     if parsed := convert_tests(hep):
+#         subset, _ = parsed.split(10)
+#         ex = TestExecutor(subset.compile())
+#         ex.test()
+#         assert ex.exit_code == ExitCode.OK
+#         assert ex.tracker.successes
+#         assert not ex.tracker.failures

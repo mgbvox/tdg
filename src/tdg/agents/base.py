@@ -17,7 +17,7 @@ from tdg.extract import UndefinedFinder
 from tdg.parse_humaneval import HEPSuite
 from tdg.parsing import find_gen_signatures, nl_join
 
-MAX_ITER_PER_AGENT = 5
+MAX_ITER_PER_AGENT = 10
 MAX_HISTORY_PER_AGENT: int = 3 + (2 * MAX_ITER_PER_AGENT)
 """Limit the number of generations a given agent can do."""
 
@@ -144,6 +144,9 @@ class Agent(abc.ABC):
             }
         )
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.pipeline_id})"
+
     @abc.abstractmethod
     def system_prompt(self) -> str:
         raise NotImplementedError()
@@ -171,12 +174,13 @@ class Agent(abc.ABC):
                 content = await f.read()
                 content = json.loads(content)
                 self.history = GenerationHistory.model_validate(content)
+                print(f"Loaded history from {self.cache_file}")
 
     async def _communicate_with_openai(self, message: str) -> Message:
         # error if too many iterations
         if len(self.history.messages) > MAX_HISTORY_PER_AGENT:
             raise MaxIterExceeded(
-                f"Agent {self.__class__.__name__} has exceeded its generation length of {MAX_HISTORY_PER_AGENT}"
+                f"Agent {self} has exceeded its generation length of {MAX_HISTORY_PER_AGENT}\n Message was: {message}"
             )
 
         # return from memory if exists!

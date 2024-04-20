@@ -30,7 +30,12 @@ class Pipeline:
         self.nav: Optional[NavAgent] = None
         self.test: Optional[TestAgent] = None
         self.dev: Optional[DevAgent] = None
-        self.tester: Optional[TestExecutor] = None
+
+        self.best_solution_failures: int = 9999999
+        self.best_solution: str = ""
+
+    def __repr__(self):
+        return f"Pipeline({self._id})"
 
     async def create_agent(self, cls: Type[Agent], **kwargs) -> Agent:
         agent = cls(**kwargs)
@@ -38,7 +43,7 @@ class Pipeline:
         await agent.load_state()
         return agent
 
-    async def gen(self, no_test: bool = False) -> Optional[str]:
+    async def gen(self, no_test: bool = False) -> tuple[str, Optional[str]]:
         print(f"Starting pipeline for context {self.code_context.signatures}")
         self.nav = await self.create_agent(NavAgent, code_context=self.code_context)
         nav_response = await self.nav.generate(self.nav.user_prompt())
@@ -54,9 +59,9 @@ class Pipeline:
         dev_response = await self.dev.generate(self.dev.user_prompt())
 
         if no_test:
-            return
+            return self._id, None
 
-        return await self.test_until_passing(
+        return self._id, await self.test_until_passing(
             solution=dev_response.content,
             depth=0,
         )
@@ -64,37 +69,49 @@ class Pipeline:
     async def test_until_passing(self, *, solution: str, depth: int) -> Optional[str]:
         print(f"TEST ITER: {depth + 1}")
         if depth > self.max_iter:
-            raise GenerationError(
-                f"Max iterations reached without a passing test suite: {self.max_iter}"
+            # give up, and return the best solution that we have.
+            return self.best_solution
+        try:
+            tests = self.test.tests + self.code_context.test_sources
+            imports = self.test.imports
+
+            script = parsing.compile_tests(
+                tests=tests,
+                imports=imports,
+                implementations=[solution],
             )
 
-        tests = self.test.tests + self.code_context.test_sources
-        imports = self.test.imports
+            uuid_small = str(uuid.uuid4()).replace("-", "")[:8]
 
-        script = parsing.compile_tests(
-            tests=tests,
-            imports=imports,
-            implementations=[solution],
-        )
+            script_log_file = self._log_path / f"script_iter_{depth}_{uuid_small}.py"
+            async with aiofiles.open(script_log_file, "w") as f:
+                await f.write(script)
 
-        script_log_file = self._log_path / f"script_iter_{depth}.py"
-        async with aiofiles.open(script_log_file, "w") as f:
-            await f.write(script)
+            tester = TestExecutor(script=script, path=script_log_file)
+            await tester.test()
+            if (n_fail := tester.n_failures()) < self.best_solution_failures:
+                self.best_solution = solution
+                self.best_solution_failures = n_fail
+                print(
+                    f"{self}: Best Solution has {self.best_solution_failures} failures"
+                )
 
-        self.tester = TestExecutor(script=script, path=script_log_file)
-        if self.tester.test().passed():
-            return solution
-        else:
-            # tests failed
-            sep = "-----"
-            fail_message = nl_join(
-                "Your implementation failed the test suite with the following errors:",
-                *[nl_join(fail.longrepr, sep) for fail in self.tester.tracker.failures],
-                sep,
-                "Please fix your implementation.",
-            )
+            if n_fail == 0:
+                return solution
+            else:
+                # tests failed
+                sep = "-----"
+                fail_message = nl_join(
+                    "Your implementation failed the test suite with the following errors:",
+                    *[nl_join(fail.longrepr, sep) for fail in tester.tracker.failures],
+                    sep,
+                    "Please fix your implementation.",
+                )
 
-            refined = await self.dev.generate(fail_message)
-            return await self.test_until_passing(
-                solution=refined.content, depth=depth + 1
-            )
+                refined = await self.dev.generate(fail_message)
+                return await self.test_until_passing(
+                    solution=refined.content, depth=depth + 1
+                )
+        except BaseException:
+            # something is broken, don't ruin the other pipelines
+            return self.best_solution

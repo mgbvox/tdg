@@ -1,4 +1,3 @@
-import random
 import re
 import textwrap
 from functools import lru_cache
@@ -27,6 +26,9 @@ class HEPSuite(BaseModel):
     prompt: str
     solution: str
 
+    def __repr__(self):
+        return f"{self.fn_name}[test:{len(self.tests)}]"
+
     def split(self, n: Optional[Union[int, float]] = 10) -> tuple[Self, Self]:
         total_tests = len(self.tests)
         match n:
@@ -40,7 +42,6 @@ class HEPSuite(BaseModel):
                 # ignore any modifiers
                 k = total_tests
 
-        random.shuffle(self.tests)
         train, test = self.tests[:k], self.tests[k:]
         return self.model_copy(update={"tests": train}), self.model_copy(
             update={"tests": test}

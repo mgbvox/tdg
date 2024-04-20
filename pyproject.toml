@@ -17,6 +17,7 @@ cs224u-utils = {git = "https://github.com/mgbvox/cs224u-utils"}
 pytest-asyncio = "^0.23.6"
 aiofiles = "^23.2.1"
 wrapt = "^1.16.0"
+pytest-json-report = "^1.5.0"
 
 
 [tool.poetry.group.dev.dependencies]

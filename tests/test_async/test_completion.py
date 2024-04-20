@@ -135,5 +135,6 @@ async def test_test_execution(tdd_agent, dev_agent):
     tests = list(tests)
     script = parsing.compile_tests(tests=tests, implementations=[solution], imports=[])
     ex = TestExecutor(script=script)
-    ex.test()
+    await ex.test()
     assert ex.passed()
+    assert ex.n_failures() == 0
