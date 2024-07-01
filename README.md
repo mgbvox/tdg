@@ -11,7 +11,7 @@ from my_module import my_func
 
 @tdg
 def test_my_func_for_some_case():
-     
+
     some_input = 3
     some_output = 6
     assert my_func(some_input) == some_output
@@ -32,35 +32,19 @@ import time
 from tdg import tdg
 from my_module import my_func
 
-# by default, constraints are passed the generated function along with 
+# by default, constraints are passed the generated function along with
 def code_is_fast(fn:Callable, *args, **kwargs) -> bool:
     start = time.time_ns()
     _ = fn(*args, **kwargs)
     return time.time_ns() - start < ... # some threshold
-    
+
 
 @tdg(constraints = [code_is_fast])
 def test_my_func_for_some_case():
-     
+
     some_input = 3
     some_output = 6
     assert my_func(some_input) == some_output
 
 
 ```
-
-
-
-# Notes
-
-
-some way to specify constraints on generated code block rather than object
-Use hypothesis for domain-specific parameter driven testing/fuzzing
-
-Papers seem to be doing:
-1. Gen many results
-2. Execute results
-3. Filter erroring / non-passing output
-4. Select best performing passing (optionally rank programs with verifier)
-
-TDG could focus on iteratively honing generated outputs by passing failure tracebacks for N hops
